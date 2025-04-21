@@ -2,13 +2,19 @@ import logo from '../assets/Logo.png'
 import {useNavigate} from 'react-router'
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import axios from 'axios'
+import useAccountStore from '../store/account'
 
 const Login = () => {
+    const name = useAccountStore((state) => state.name)
+    const setUserInfo = useAccountStore((state) => state.setDetails)
     const navigate = useNavigate()
     const [passwordVisible, setPasswordVisible] = useState(false);
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     const togglePasswordVisibility = () => {
         setPasswordVisible(!passwordVisible);
@@ -16,12 +22,36 @@ const Login = () => {
 
     const handleLogin = () => {
         // Simple validation
-        if (!username.trim() || !password.trim()) {
-            alert('Please enter both username and password');
+        if (!email.trim() || !password.trim()) {
+            setError('Please enter both email and password');
             return;
         }
         
-        navigate('/dashboard');
+        setIsLoading(true);
+        setError('');
+        
+        axios.post('/accounts/login/', {
+            login_type: 'user',
+            email,
+            password
+        })
+        .then(response => {
+            // Pass the entire response to the store
+            setUserInfo(response);
+            console.log('User authenticated:', name);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`
+            navigate('/dashboard');
+        })
+        .catch(error => {
+            console.error('Login error:', error);
+            setError(
+                error.response?.data?.message || 
+                'Login failed. Please check your credentials and try again.'
+            );
+        })
+        .finally(() => {
+            setIsLoading(false);
+        });
     };
 
     return(
@@ -94,14 +124,14 @@ const Login = () => {
                         }}
                     >
                         <div className="mb-4">
-                            <label htmlFor="username" className="block text-sm font-medium mb-1" 
-                                   style={{ color: 'var(--color-text-primary)' }}>Username</label>
+                            <label htmlFor="email" className="block text-sm font-medium mb-1" 
+                                   style={{ color: 'var(--color-text-primary)' }}>email</label>
                             <input 
-                                id="username"
+                                id="email"
                                 type="text" 
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                placeholder='Enter your username' 
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder='Enter your email' 
                                 className="w-full p-3 border rounded-lg transition-all" 
                                 style={{ 
                                     borderColor: 'var(--color-border)',
@@ -163,10 +193,22 @@ const Login = () => {
                             }}
                             whileHover={{ scale: 1.02, boxShadow: 'var(--shadow-lg)' }}
                             whileTap={{ scale: 0.98 }}
+                            disabled={isLoading}
                         >
-                            Sign In
+                            {isLoading ? 'Signing in...' : 'Sign In'}
                         </motion.button>
                     </motion.form>
+                    
+                    {error && (
+                        <motion.div 
+                            className="mt-4 p-3 text-sm text-red-800 bg-red-100 rounded-lg"
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            {error}
+                        </motion.div>
+                    )}
                     
                     <motion.div 
                         className="mt-6 text-center text-sm"

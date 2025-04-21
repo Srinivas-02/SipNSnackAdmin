@@ -6,11 +6,32 @@ import Locations from '../components/dashboard/Locations';
 import MenuItems from '../components/dashboard/MenuItems';
 import Orders from '../components/dashboard/Orders';
 import Feedback from '../components/dashboard/Feedback';
+import axios from 'axios'
+import useAccountStore from '../store/account'
+import useLocationStore from '../store/location'
 
 const Dashboard = () => {
     const [isMobile, setIsMobile] = useState(false);
+    const isSuperAdmin = useAccountStore((state) => state.isSuperAdmin);
     const location = useLocation();
+    
+    // Use destructuring in a single line as preferred
+    const { setLocations } = useLocationStore();
+    // Fetch locations for super admin - only runs once on mount
+    useEffect(() => {
+        if(isSuperAdmin) {
+            axios.get('/locations/')
+                .then((response) => {
+                    setLocations(response);
+                })
+                .catch(error => {
+                    console.error("Error fetching locations:", error);
+                });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty dependency array - only runs once on mount
 
+    // Handle responsive layout
     useEffect(() => {
         const checkScreenSize = () => {
             setIsMobile(window.innerWidth < 768);

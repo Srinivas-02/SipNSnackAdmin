@@ -5,6 +5,9 @@ import App from './App.tsx'
 import Login from './routes/Login.tsx'
 import Dashboard from './routes/Dashboard.tsx'
 import './main.css'
+import axios from 'axios'
+
+axios.defaults.baseURL = 'http://localhost:8000'
 
 const router = createBrowserRouter([
   {
