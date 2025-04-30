@@ -1,217 +1,100 @@
-import { CountrySelect, StateSelect, CitySelect, PhonecodeSelect } from 'react-country-state-city';
-import 'react-country-state-city/dist/react-country-state-city.css';
-import { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding } from 'react-icons/fa';
 import useLocationStore from '../../store/location'
-
-interface Location {
-  id: number,
-    name: string,
-    city: string,
-    state: string,
-    address: string,
-    phone: number
-}
+import { useState, useEffect } from 'react';
 
 const Locations = () => {
-  const locations = useLocationStore((state) => state.locations)
+  const locations = useLocationStore((state) => state.locations);
+  const setLocations = useLocationStore((state) => state.setLocations);
   const [showModal, setShowModal] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<null | {
+    id: number;
+    name: string;
+    city: string;
+    state: string;
+    address: string;
+    phone: number;
+  }>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Country-state-city selection states
-  const [countryCode, setCountryCode] = useState<string>('');
-  const [countryName, setCountryName] = useState<string>('');
-  const [stateCode, setStateCode] = useState<string>('');
-  const [stateName, setStateName] = useState<string>('');
-  const [cityCode, setCityCode] = useState<string>('');
-  const [cityName, setCityName] = useState<string>('');
-  const [phoneCode, setPhoneCode] = useState<string>('');
-  
-  const [formData, setFormData] = useState<Omit<Location, 'id'>>({
+
+  const [formData, setFormData] = useState<{
+    name: string;
+    city: string;
+    state: string;
+    address: string;
+    phone: number;
+  }>({
     name: '',
-    countryCode: '',
-    stateCode: '',
-    cityCode: '',
+    city: '',
+    state: '',
     address: '',
-    phone: '',
-    status: 'Active',
+    phone: 0,
   });
 
-  // Reset form states when modal is closed
   useEffect(() => {
     if (!showModal) {
-      resetFormStates();
+      setFormData({ name: '', city: '', state: '', address: '', phone: 0 });
+      setCurrentLocation(null);
     }
   }, [showModal]);
 
-  const resetFormStates = () => {
-    setCountryCode('');
-    setCountryName('');
-    setStateCode('');
-    setStateName('');
-    setCityCode('');
-    setCityName('');
-    setPhoneCode('');
-  };
-
-  // In a real app, would fetch from API
-  useEffect(() => {
-    // const fetchLocations = async () => {
-    //   try {
-    //     const response = await fetch('/api/locations');
-    //     const data = await response.json();
-    //     setLocations(data);
-    //   } catch (error) {
-    //     console.error('Error fetching locations:', error);
-    //   }
-    // };
-    // fetchLocations();
-  }, []);
-
   const handleAddLocation = () => {
     setCurrentLocation(null);
-    setFormData({
-      name: '',
-      countryCode: '',
-      stateCode: '',
-      cityCode: '',
-      address: '',
-      phone: '',
-      status: 'Active',
-    });
-    resetFormStates();
+    setFormData({ name: '', city: '', state: '', address: '', phone: 0 });
     setShowModal(true);
   };
 
-  const handleEditLocation = (location: Location) => {
+  const handleEditLocation = (location: {
+    id: number;
+    name: string;
+    city: string;
+    state: string;
+    address: string;
+    phone: number;
+  }) => {
     setCurrentLocation(location);
     setFormData({
       name: location.name,
-      countryCode: location.countryCode,
-      stateCode: location.stateCode,
-      cityCode: location.cityCode,
+      city: location.city,
+      state: location.state,
       address: location.address,
       phone: location.phone,
-      status: location.status,
     });
-    
-    // Set the location data for dropdowns
-    setCountryCode(location.countryCode);
-    setStateCode(location.stateCode);
-    setCityCode(location.cityCode);
-    
     setShowModal(true);
   };
 
-  const handleDeleteLocation = (id: string) => {
+  const handleDeleteLocation = (id: number) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
-      // In a real app, would call API to delete
-      setLocations(locations.filter(location => location.id !== id));
+      setLocations({ data: locations.filter(location => location.id !== id) });
     }
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleCountryChange = (selectedCountry: any) => {
-    setCountryCode(selectedCountry.code);
-    setCountryName(selectedCountry.name);
-    // Reset state and city when country changes
-    setStateCode('');
-    setStateName('');
-    setCityCode('');
-    setCityName('');
-    
-    setFormData({
-      ...formData,
-      countryCode: selectedCountry.code,
-      stateCode: '',
-      cityCode: '',
-    });
-  };
-
-  const handleStateChange = (selectedState: any) => {
-    setStateCode(selectedState.code);
-    setStateName(selectedState.name);
-    // Reset city when state changes
-    setCityCode('');
-    setCityName('');
-    
-    setFormData({
-      ...formData,
-      stateCode: selectedState.code,
-      cityCode: '',
-    });
-  };
-
-  const handleCityChange = (selectedCity: any) => {
-    setCityCode(selectedCity.code);
-    setCityName(selectedCity.name);
-    
-    setFormData({
-      ...formData,
-      cityCode: selectedCity.code,
-    });
-  };
-
-  const handlePhoneCodeChange = (selectedPhoneCode: any) => {
-    setPhoneCode(selectedPhoneCode.code);
-    
-    // Update phone number with country code if it doesn't already have one
-    const currentPhone = formData.phone.trim();
-    const newPhone = currentPhone.startsWith('+') 
-      ? currentPhone 
-      : `+${selectedPhoneCode.code} ${currentPhone}`;
-    
-    setFormData({
-      ...formData,
-      phone: newPhone,
-    });
+    setFormData({ ...formData, [name]: name === 'phone' ? Number(value) : value });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Combine address components
-    const combinedAddress = formData.address;
-    
-    const finalFormData = {
-      ...formData,
-      address: combinedAddress,
-    };
-    
     if (currentLocation) {
-      // Edit existing location
-      // In a real app, would call API to update
-      setLocations(
-        locations.map(location => 
-          location.id === currentLocation.id 
-            ? { ...location, ...finalFormData } 
+      setLocations({
+        data: locations.map(location =>
+          location.id === currentLocation.id
+            ? { ...location, ...formData }
             : location
         )
-      );
+      });
     } else {
-      // Add new location
-      const newLocation: Location = {
-        id: Date.now().toString(), // In a real app, the ID would come from the backend
-        ...finalFormData,
+      const newLocation = {
+        id: Date.now(),
+        ...formData,
       };
-      // In a real app, would call API to create
-      setLocations([...locations, newLocation]);
+      setLocations({ data: [...locations, newLocation] });
     }
-    
     setShowModal(false);
   };
 
-  const getFormattedAddress = (location: Location) => {
-    return location.address;
-  };
-
   const filteredLocations = locations.filter(
-    location => 
+    location =>
       location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       location.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -251,9 +134,10 @@ const Locations = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admins</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -271,21 +155,14 @@ const Locations = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{getFormattedAddress(location)}</div>
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{location.city}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{location.state}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{location.address}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-500">
                         <FaPhone className="mr-2 text-gray-400" size={14} />
                         {location.phone}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        location.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {location.status}
-                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
@@ -309,7 +186,7 @@ const Locations = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-sm text-gray-500 text-center">
+                  <td colSpan={6} className="px-6 py-8 text-sm text-gray-500 text-center">
                     No locations found matching your search
                   </td>
                 </tr>
@@ -335,7 +212,6 @@ const Locations = () => {
                 <FaTimes size={20} />
               </button>
             </div>
-            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -351,70 +227,36 @@ const Locations = () => {
                   required
                 />
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Country*
+                    City*
                   </label>
-                  <CountrySelect
-                    onChange={handleCountryChange}
-                    placeHolder="Select Country"
-                    containerClassName="w-full rounded-lg"
-                    inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    defaultValue={countryCode}
-                    showFlag={true}
+                  <input
+                    type="text"
+                    name="city"
+                    value={formData.city}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter city"
                     required
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State/Province
+                    State*
                   </label>
-                  <StateSelect
-                    countryCode={countryCode}
-                    onChange={handleStateChange}
-                    placeHolder="Select State"
-                    containerClassName="w-full rounded-lg"
-                    inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    defaultValue={stateCode}
-                    disabled={!countryCode}
+                  <input
+                    type="text"
+                    name="state"
+                    value={formData.state}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter state"
+                    required
                   />
                 </div>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City
-                  </label>
-                  <CitySelect
-                    countryCode={countryCode}
-                    stateCode={stateCode}
-                    onChange={handleCityChange}
-                    placeHolder="Select City"
-                    containerClassName="w-full rounded-lg"
-                    inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    defaultValue={cityCode}
-                    disabled={!stateCode}
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Code
-                  </label>
-                  <PhonecodeSelect
-                    onChange={handlePhoneCodeChange}
-                    placeHolder="Select Phone Code"
-                    containerClassName="w-full rounded-lg"
-                    inputClassName="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    showFlag={true}
-                  />
-                </div>
-              </div>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Street Address*
@@ -429,7 +271,6 @@ const Locations = () => {
                   required
                 />
               </div>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number*
@@ -440,33 +281,17 @@ const Locations = () => {
                       <FaPhone className="h-4 w-4 text-gray-400" />
                     </div>
                     <input
-                      type="text"
+                      type="number"
                       name="phone"
                       value={formData.phone}
                       onChange={handleFormChange}
                       className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Phone number with country code"
+                      placeholder="Phone number"
                       required
                     />
                   </div>
                 </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-              
               <div className="pt-4 flex justify-end space-x-3 border-t border-gray-200">
                 <button
                   type="button"

@@ -37,6 +37,13 @@ const Login = () => {
         })
         .then(response => {
             // Pass the entire response to the store
+            console.log(response)
+            if(response.data.user.is_staff){
+                setError(
+                    'Login failed. Staff has no access.'
+                );
+                return
+            }
             setUserInfo(response);
             console.log('User authenticated:', name);
             axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`
