@@ -2,11 +2,11 @@ import logo from '../assets/Logo.png'
 import {useNavigate} from 'react-router'
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import axios from 'axios'
+import api from '../common/api'
 import useAccountStore from '../store/account'
+import useMenuStore from '../store/menu'
 
 const Login = () => {
-    const name = useAccountStore((state) => state.name)
     const setUserInfo = useAccountStore((state) => state.setDetails)
     const navigate = useNavigate()
     const [passwordVisible, setPasswordVisible] = useState(false);
@@ -15,51 +15,43 @@ const Login = () => {
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-
+    const setCategories = useMenuStore((state)=> state.setCategories)
+    const setMenuItems  = useMenuStore((state) => state.setMenuItems)
     const togglePasswordVisibility = () => {
         setPasswordVisible(!passwordVisible);
     };
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         // Simple validation
         if (!email.trim() || !password.trim()) {
             setError('Please enter both email and password');
             return;
         }
-        
-        setIsLoading(true);
-        setError('');
-        
-        axios.post('/accounts/login/', {
-            login_type: 'user',
-            email,
-            password
-        })
-        .then(response => {
-            // Pass the entire response to the store
-            console.log(response)
-            if(response.data.user.is_staff){
-                setError(
-                    'Login failed. Staff has no access.'
-                );
-                return
+        try{
+            setIsLoading(true)
+            const response = await api.post('/accounts/login/', {
+                email,
+                password
+            });            
+            setUserInfo(response.data)
+            const categoryresponse = await api.get('/menu/categories/')
+            setCategories(categoryresponse.data)
+            const menuitemresponse = await api.get('/menu/menu-items/')
+            setMenuItems(menuitemresponse.data)
+            setIsLoading(false)
+            navigate('/dashboard')
+        } catch (error) {
+            if (typeof error === 'object' && error !== null && 'response' in error && error.response) {
+                // @ts-expect-error: error.response is likely from Axios
+                setError(error.response.data?.message || 'Invalid credentials');
+            } else if (typeof error === 'object' && error !== null && 'request' in error && error.request) {
+                setError('No response from server. Please try again.');
+            } else {
+                setError('An error occurred. Please try again.');
             }
-            setUserInfo(response);
-            console.log('User authenticated:', name);
-            axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`
-            navigate('/dashboard');
-        })
-        .catch(error => {
-            console.error('Login error:', error);
-            setError(
-                error.response?.data?.message || 
-                'Login failed. Please check your credentials and try again.'
-            );
-        })
-        .finally(() => {
-            setIsLoading(false);
-        });
-    };
+        }
+        
+    }
 
     return(
         <div className="w-full h-screen flex flex-col lg:flex-row bg-gradient-to-br from-amber-50 to-orange-100 overflow-hidden">
