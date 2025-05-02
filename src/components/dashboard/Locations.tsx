@@ -1,4 +1,4 @@
-import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding, FaUserShield } from 'react-icons/fa';
 import useLocationStore from '../../store/location'
 import useAccountStore from '../../store/account'
 import { useState, useEffect } from 'react';
@@ -33,10 +33,15 @@ function isApiError(err: unknown): err is { response: { data: { message: string 
 const Locations = () => {
   const [cpassword, setcpassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const locations = useLocationStore((state) => state.locations);
+  const locations = useLocationStore((state) => state.locations) || [];
+  const franchiseAdmins = useLocationStore((state) => state.franchiseAdmins) || [];
+  const loading = useLocationStore((state) => state.loading);
+  const fetchFranchiseAdmins = useLocationStore((state) => state.fetchFranchiseAdmins);
+  const addFranchiseAdmin = useLocationStore((state) => state.addFranchiseAdmin);
   const user = useAccountStore((state) => state.user)
   const setLocations = useLocationStore((state) => state.setLocations);
   const [showModal, setShowModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<null | {
     id: number;
     name: string;
@@ -63,6 +68,25 @@ const Locations = () => {
     password: '',
   });
 
+  const [adminFormData, setAdminFormData] = useState<{
+    email: string;
+    password: string;
+    first_name: string;
+    last_name: string;
+    location_ids: number[];
+  }>({
+    email: '',
+    password: '',
+    first_name: '',
+    last_name: '',
+    location_ids: [],
+  });
+
+  useEffect(() => {
+    // Fetch franchise admins when component mounts
+    fetchFranchiseAdmins().catch(console.error);
+  }, [fetchFranchiseAdmins]);
+
   useEffect(() => {
     if (!showModal) {
       setFormData({ name: '', city: '', state: '', address: '', phone: null , password: '' });
@@ -72,12 +96,32 @@ const Locations = () => {
     }
   }, [showModal]);
 
+  useEffect(() => {
+    if (!showAdminModal) {
+      setAdminFormData({
+        email: '',
+        password: '',
+        first_name: '',
+        last_name: '',
+        location_ids: [],
+      });
+      setcpassword('')
+      setError('')
+    }
+  }, [showAdminModal]);
+
   const handleAddLocation = () => {
     setCurrentLocation(null);
     setFormData({ name: '', city: '', state: '', address: '', phone: null , password: ''});
     setError('')
     setcpassword('')
     setShowModal(true);
+  };
+
+  const handleAddAdmin = () => {
+    setError('')
+    setcpassword('')
+    setShowAdminModal(true);
   };
 
   // const handleEditLocation = (location: {
@@ -101,13 +145,38 @@ const Locations = () => {
 
   const handleDeleteLocation = (id: number) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
-      setLocations({ data: locations.filter(location => location.id !== id) });
+      setLocations(locations.filter(location => location.id !== id) );
     }
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: name === 'phone' ? Number(value) : value });
+  };
+
+  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'location_ids' && e.target instanceof HTMLSelectElement) {
+      const options = e.target.options;
+      const selectedValues: number[] = [];
+      
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].selected) {
+          selectedValues.push(Number(options[i].value));
+        }
+      }
+      
+      setAdminFormData(prev => ({
+        ...prev,
+        location_ids: selectedValues
+      }));
+    } else {
+      setAdminFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,7 +191,7 @@ const Locations = () => {
         ...formData
       });
       if (response && response.data) {
-        setLocations({ data: [...locations, response.data] });
+        setLocations([...locations, response.data]);
         setShowModal(false);
         setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
         setcpassword('');
@@ -137,12 +206,47 @@ const Locations = () => {
     }
   };
 
+  const handleAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    
+    if (adminFormData.password !== cpassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    if (adminFormData.location_ids.length === 0) {
+      setError('Please select at least one location');
+      return;
+    }
+    
+    try {
+      await addFranchiseAdmin(adminFormData);
+      setShowAdminModal(false);
+      setAdminFormData({
+        email: '',
+        password: '',
+        first_name: '',
+        last_name: '',
+        location_ids: [],
+      });
+      setcpassword('');
+    } catch (err: unknown) {
+      if (isApiError(err)) {
+        setError(err.response.data.message);
+      } else {
+        setError('Failed to add franchise admin');
+      }
+      console.log(err);
+    }
+  };
+
   const filteredLocations = locations.filter(
     location =>
       location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       location.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  console.log(filteredLocations)
+  
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-8">
@@ -163,13 +267,23 @@ const Locations = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        {user?.is_super_admin && <button
-          onClick={handleAddLocation}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <FaPlus size={14} />
-          <span>Add New Location</span>
-        </button>}
+        <div className="flex gap-3">
+          {user?.is_super_admin && <button
+            onClick={handleAddLocation}
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <FaPlus size={14} />
+            <span>Add New Location</span>
+          </button>}
+          
+          {user?.is_super_admin && <button
+            onClick={handleAddAdmin}
+            className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+          >
+            <FaUserShield size={14} />
+            <span>Add Franchise Admin</span>
+          </button>}
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -182,6 +296,7 @@ const Locations = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Franchise Admins</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -208,6 +323,21 @@ const Locations = () => {
                         {location.phone}
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col space-y-1 text-sm text-gray-500">
+                        {franchiseAdmins
+                          .filter(admin => admin.locations.some(loc => loc.id === location.id))
+                          .map(admin => (
+                            <div key={admin.id} className="flex items-center space-x-1">
+                              <FaUserShield className="text-green-500" size={12} />
+                              <span>{admin.first_name} {admin.last_name} ({admin.email})</span>
+                            </div>
+                          ))}
+                        {!franchiseAdmins.some(admin => admin.locations.some(loc => loc.id === location.id)) && (
+                          <span className="text-gray-400 italic">No admins assigned</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
                         {/* <button 
@@ -230,8 +360,8 @@ const Locations = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-sm text-gray-500 text-center">
-                    No locations found matching your search
+                  <td colSpan={7} className="px-6 py-8 text-sm text-gray-500 text-center">
+                    {loading ? 'Loading locations...' : 'No locations found matching your search'}
                   </td>
                 </tr>
               )}
@@ -393,6 +523,154 @@ const Locations = () => {
                   disabled={formData.password !== cpassword}
                 >
                   {currentLocation ? 'Update' : 'Add'} Location
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Franchise Admin Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-90vh overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Add Franchise Admin
+              </h3>
+              <button 
+                onClick={() => setShowAdminModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close modal"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAdminSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={adminFormData.first_name}
+                    onChange={handleAdminFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter first name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={adminFormData.last_name}
+                    onChange={handleAdminFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter last name"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={adminFormData.email}
+                  onChange={handleAdminFormChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Email address"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={adminFormData.password}
+                    onChange={handleAdminFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    name="confirm_password"
+                    value={cpassword}
+                    onChange={(e) => { setcpassword(e.target.value); if (error) setError(null); }}
+                    onBlur={() => {
+                      if (adminFormData.password !== cpassword) {
+                        setError('Passwords do not match');
+                      } else {
+                        setError(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Confirm Password"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assign Locations
+                </label>
+                <select
+                  name="location_ids"
+                  multiple
+                  value={adminFormData.location_ids.map(id => id.toString())}
+                  onChange={handleAdminFormChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  size={Math.min(5, locations.length)}
+                >
+                  {locations.map(location => (
+                    <option key={location.id} value={location.id}>
+                      {location.name} ({location.city}, {location.state})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple locations</p>
+              </div>
+              
+              {error && (
+                <div className="text-red-600 text-sm mb-2">{error}</div>
+              )}
+              
+              <div className="pt-4 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={adminFormData.password !== cpassword || loading}
+                >
+                  {loading ? 'Adding...' : 'Add Franchise Admin'}
                 </button>
               </div>
             </form>

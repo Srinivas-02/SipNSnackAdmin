@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaImage, FaFolderPlus } from 'react-icons/fa';
 import useLocationStore from '../../store/location';
 import useMenuStore from '../../store/menu';
-
+import api from '../../common/api'
 const MenuItems = () => {
   // Get locations from store
   const locations = useLocationStore((state) => state.locations);
@@ -41,14 +41,14 @@ const MenuItems = () => {
   const [formData, setFormData] = useState<{
     name: string;
     price: number;
-    category: string;
+    category_id?: number;
     image?: string | null;
     location_id?: number;
     description?: string;
   }>({
     name: '',
     price: 0,
-    category: '',
+    category_id: undefined,
     image: '',
     location_id: undefined,
     description: '',
@@ -67,7 +67,7 @@ const MenuItems = () => {
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedLocation(e.target.value);
     setSelectedCategory('all');
-    setFormData((prev) => ({ ...prev, location_id: e.target.value !== 'all' ? Number(e.target.value) : undefined, category: '' }));
+    setFormData((prev) => ({ ...prev, location_id: e.target.value !== 'all' ? Number(e.target.value) : undefined, category_id: undefined }));
   };
 
   // Handle category change
@@ -80,7 +80,7 @@ const MenuItems = () => {
     setFormData({
       name: '',
       price: 0,
-      category: '',
+      category_id: undefined,
       image: '',
       location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
       description: '',
@@ -96,12 +96,20 @@ const MenuItems = () => {
     location_id: number;
     image?: string | null;
     description?: string;
+    category_id?: number;
   }) => {
+    // Find category_id if not present
+    let categoryId = item.category_id;
+    if (!categoryId) {
+      const cats = getCategoriesForLocation(item.location_id);
+      const found = cats.find((cat) => cat.name === item.category);
+      categoryId = found ? found.id : undefined;
+    }
     setCurrentItem(item);
     setFormData({
       name: item.name,
       price: item.price,
-      category: item.category,
+      category_id: categoryId,
       image: item.image ?? '',
       location_id: item.location_id,
       description: item.description ?? '',
@@ -121,14 +129,60 @@ const MenuItems = () => {
     const { name, value } = e.target;
     let updatedValue: string | number | undefined = value;
     if (name === 'price') updatedValue = parseFloat(value);
-    if (name === 'location_id') updatedValue = value ? Number(value) : undefined;
+    if (name === 'location_id' || name === 'category_id') updatedValue = value ? Number(value) : undefined;
     setFormData({ ...formData, [name]: updatedValue });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // API integration for add/edit menu item goes here
-    setShowModal(false);
+    try {
+      console.log(formData)
+      const response = await api.post('/menu/menu-items/', {
+        ...formData
+      });
+      if (response.status === 201) {
+        // Find the category name using category_id and location_id
+        let categoryName = '';
+        if (formData.location_id && formData.category_id) {
+          const cats = getCategoriesForLocation(formData.location_id);
+          const found = cats.find((cat) => cat.id === formData.category_id);
+          if (found) categoryName = found.name;
+        }
+        // Construct the full menu item object
+        if (formData.location_id !== undefined) {
+          const newMenuItem = {
+            id: response.data.id,
+            name: response.data.name,
+            price: formData.price,
+            category: categoryName,
+            location_id: Number(formData.location_id),
+            image: formData.image ?? '',
+            description: formData.description ?? '',
+          };
+          useMenuStore.getState().addMenuItem(newMenuItem);
+        }
+        setShowModal(false);
+        // Optionally reset form
+        setFormData({
+          name: '',
+          price: 0,
+          category_id: undefined,
+          image: '',
+          location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
+          description: '',
+        });
+        alert('Menu item added successfully');
+      }
+    } catch (err: any) {
+      let errorMessage = 'Error adding menu item';
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      alert(errorMessage);
+      console.error('Error adding menu item:', err);
+    }
   };
 
   // Category modal handlers
@@ -139,10 +193,46 @@ const MenuItems = () => {
     setCategoryForm({ ...categoryForm, [name]: updatedValue });
   };
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    // API integration for add category goes here
-    setShowCategoryModal(false);
+    
+    if (!categoryForm.name || !categoryForm.location_id) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const response = await api.post('/menu/categories/', {
+        name: categoryForm.name,
+        location_id: categoryForm.location_id
+      });
+
+      if (response.status === 201) {
+        // Update categories in store
+        const newCategory = response.data;
+        useMenuStore.getState().addCategory(newCategory);
+
+        // Reset form and close modal
+        setCategoryForm({
+          name: '',
+          location_id: undefined
+        });
+        setShowCategoryModal(false);
+        
+        alert('Category created successfully');
+      }
+    } catch (err: any) {
+      let errorMessage = 'Error creating category';
+      
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      alert(errorMessage);
+      console.error('Error creating category:', err);
+    }
   };
 
   // Filter menu items by location and category
@@ -203,7 +293,6 @@ const MenuItems = () => {
           <button
             onClick={handleAddMenuItem}
             className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-            disabled={selectedLocation === 'all'}
           >
             <FaPlus size={14} />
             <span>Add Menu Item</span>
@@ -326,8 +415,8 @@ const MenuItems = () => {
                     Category
                   </label>
                   <select
-                    name="category"
-                    value={formData.category}
+                    name="category_id"
+                    value={formData.category_id !== undefined && formData.category_id !== null ? String(formData.category_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
@@ -335,7 +424,7 @@ const MenuItems = () => {
                   >
                     <option value="">Select a category</option>
                     {getCategoriesForLocation(formData.location_id).map((cat) => (
-                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
                 </div>

@@ -1,57 +1,114 @@
 import logo from '../assets/Logo.png'
-import {useNavigate} from 'react-router'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import api from '../common/api'
 import useAccountStore from '../store/account'
 import useMenuStore from '../store/menu'
+import useLocationStore from '../store/location'
+import { useNavigate } from 'react-router-dom';
+
 
 const Login = () => {
-    const setUserInfo = useAccountStore((state) => state.setDetails)
-    const navigate = useNavigate()
+    const { setDetails, isAuthenticated } = useAccountStore();
+    const { setLocations } = useLocationStore();
+    const { setCategories, setMenuItems } = useMenuStore();
+    const navigate = useNavigate();
+    
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const setCategories = useMenuStore((state)=> state.setCategories)
-    const setMenuItems  = useMenuStore((state) => state.setMenuItems)
+    
+    // Effect to redirect if authenticated
+    useEffect(() => {
+        if (isAuthenticated) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [isAuthenticated, navigate]);
+    
     const togglePasswordVisibility = () => {
         setPasswordVisible(!passwordVisible);
     };
 
-    const handleLogin = async () => {
+    const fetchInitialData = async () => {
+        try {
+            // Get locations data
+            const locationResponse = await api.get('/locations/');
+            setLocations(locationResponse.data); // Make sure to use .data property
+            console.log(locationResponse)
+            // Get menu categories
+            const categoryResponse = await api.get('/menu/categories/');
+            setCategories(categoryResponse.data);
+            
+            // Get menu items
+            const menuItemResponse = await api.get('/menu/menu-items/');
+            setMenuItems(menuItemResponse.data);
+            
+            return true;
+        } catch (error) {
+            console.error('Error fetching initial data:', error);
+            return false;
+        }
+    };
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Reset error state
+        setError('');
+        
         // Simple validation
         if (!email.trim() || !password.trim()) {
             setError('Please enter both email and password');
             return;
         }
-        try{
-            setIsLoading(true)
+        
+        try {
+            setIsLoading(true);
+            
             const response = await api.post('/accounts/login/', {
                 email,
                 password
-            });            
-            setUserInfo(response.data)
-            const categoryresponse = await api.get('/menu/categories/')
-            setCategories(categoryresponse.data)
-            const menuitemresponse = await api.get('/menu/menu-items/')
-            setMenuItems(menuitemresponse.data)
-            setIsLoading(false)
-            navigate('/dashboard')
-        } catch (error) {
-            if (typeof error === 'object' && error !== null && 'response' in error && error.response) {
-                // @ts-expect-error: error.response is likely from Axios
-                setError(error.response.data?.message || 'Invalid credentials');
-            } else if (typeof error === 'object' && error !== null && 'request' in error && error.request) {
-                setError('No response from server. Please try again.');
+            });
+            
+            // Save authentication details
+            setDetails(response.data);
+            
+            // Fetch initial data needed for the dashboard
+            const success = await fetchInitialData();
+            
+            if (!success) {
+                setError('Error loading dashboard data. Please try again.');
+                setIsLoading(false);
+                return;
+            }
+            
+            setIsLoading(false);
+            
+            // The navigation will now happen in the useEffect hook when isAuthenticated changes
+        } catch (error: any) {
+            setIsLoading(false);
+            
+            if (error.response) {
+                // Server responded with an error
+                if (error.response.status === 401) {
+                    setError('Invalid email or password');
+                } else if (error.response.data?.message) {
+                    setError(error.response.data.message);
+                } else {
+                    setError(`Login failed: ${error.response.status}`);
+                }
+            } else if (error.request) {
+                // No response received
+                setError('No response from server. Please check your connection.');
             } else {
-                setError('An error occurred. Please try again.');
+                // Other error
+                setError('Login failed. Please try again.');
             }
         }
-        
-    }
+    };
 
     return(
         <div className="w-full h-screen flex flex-col lg:flex-row bg-gradient-to-br from-amber-50 to-orange-100 overflow-hidden">
@@ -92,9 +149,9 @@ const Login = () => {
             </motion.div>
             
             {/* Right side with login form - responsive padding/sizing */}
-            <div className="flex-1 flex items-center p-4 md:p-8 lg:p-12 ">
+            <div className="flex-1 flex items-center p-4 md:p-8 lg:p-12">
                 <motion.div 
-                    className="w-[80%] max-w-md mx-auto bg-white rounded-xl shadow-2xl p-6 md:p-8 "
+                    className="w-[80%] max-w-md mx-auto bg-white rounded-xl shadow-2xl p-6 md:p-8"
                     style={{ 
                         boxShadow: 'var(--shadow-xl)',
                         borderRadius: 'var(--border-radius-lg)'
@@ -117,17 +174,14 @@ const Login = () => {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: 0.8 }}
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            handleLogin();
-                        }}
+                        onSubmit={handleLogin}
                     >
                         <div className="mb-4">
                             <label htmlFor="email" className="block text-sm font-medium mb-1" 
-                                   style={{ color: 'var(--color-text-primary)' }}>email</label>
+                                   style={{ color: 'var(--color-text-primary)' }}>Email</label>
                             <input 
                                 id="email"
-                                type="text" 
+                                type="email" 
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder='Enter your email' 

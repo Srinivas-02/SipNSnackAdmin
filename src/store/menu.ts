@@ -31,6 +31,8 @@ interface MenuState {
     categoriesByLocation: CategoriesByLocation;
     setCategories: (response: CategoryApiResponse) => void;
     setMenuItems: (response: MenuitemApiResponse) => void;
+    addCategory: (category: Omit<Category, 'menu_items'>) => void;
+    addMenuItem: (item: MenuItem) => void;
 }
 
 const useMenuStore = create<MenuState>((set, get) => ({
@@ -57,6 +59,30 @@ const useMenuStore = create<MenuState>((set, get) => ({
         });
         set({ categoriesByLocation });
         console.log('\n\n\n',categoriesByLocation,'\n\n\n')
+    },
+    addCategory: (category) => {
+        set((state) => {
+            const locId = category.location_id;
+            const newCategory: Category = { ...category, menu_items: [] };
+            const updated = { ...state.categoriesByLocation };
+            if (!updated[locId]) updated[locId] = [];
+            updated[locId] = [...updated[locId], newCategory];
+            return { categoriesByLocation: updated };
+        });
+    },
+    addMenuItem: (item) => {
+        set((state) => {
+            const locId = item.location_id;
+            const updated = { ...state.categoriesByLocation };
+            const categoryArr = updated[locId];
+            if (categoryArr) {
+                const cat = categoryArr.find(c => c.name === item.category);
+                if (cat) {
+                    cat.menu_items = [...cat.menu_items, item];
+                }
+            }
+            return { categoriesByLocation: updated };
+        });
     }
 }));
 
