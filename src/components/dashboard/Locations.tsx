@@ -1,9 +1,40 @@
-import { FaPlus, FaEdit, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding } from 'react-icons/fa';
 import useLocationStore from '../../store/location'
+import useAccountStore from '../../store/account'
 import { useState, useEffect } from 'react';
+import api from '../../common/api'
+
+function isApiError(err: unknown): err is { response: { data: { message: string } } } {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'response' in err
+  ) {
+    const response = (err as { response?: unknown }).response;
+    if (
+      typeof response === 'object' &&
+      response !== null &&
+      'data' in response
+    ) {
+      const data = (response as { data?: unknown }).data;
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'message' in data &&
+        typeof (data as { message?: unknown }).message === 'string'
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 const Locations = () => {
+  const [cpassword, setcpassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const locations = useLocationStore((state) => state.locations);
+  const user = useAccountStore((state) => state.user)
   const setLocations = useLocationStore((state) => state.setLocations);
   const [showModal, setShowModal] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<null | {
@@ -21,46 +52,52 @@ const Locations = () => {
     city: string;
     state: string;
     address: string;
-    phone: number;
+    phone: null | number;
+    password : string;
   }>({
     name: '',
     city: '',
     state: '',
     address: '',
-    phone: 0,
+    phone: null,
+    password: '',
   });
 
   useEffect(() => {
     if (!showModal) {
-      setFormData({ name: '', city: '', state: '', address: '', phone: 0 });
+      setFormData({ name: '', city: '', state: '', address: '', phone: null , password: '' });
+      setcpassword('')
+      setError('')
       setCurrentLocation(null);
     }
   }, [showModal]);
 
   const handleAddLocation = () => {
     setCurrentLocation(null);
-    setFormData({ name: '', city: '', state: '', address: '', phone: 0 });
+    setFormData({ name: '', city: '', state: '', address: '', phone: null , password: ''});
+    setError('')
+    setcpassword('')
     setShowModal(true);
   };
 
-  const handleEditLocation = (location: {
-    id: number;
-    name: string;
-    city: string;
-    state: string;
-    address: string;
-    phone: number;
-  }) => {
-    setCurrentLocation(location);
-    setFormData({
-      name: location.name,
-      city: location.city,
-      state: location.state,
-      address: location.address,
-      phone: location.phone,
-    });
-    setShowModal(true);
-  };
+  // const handleEditLocation = (location: {
+  //   id: number;
+  //   name: string;
+  //   city: string;
+  //   state: string;
+  //   address: string;
+  //   phone: number;
+  // }) => {
+  //   setCurrentLocation(location);
+  //   setFormData({
+  //     name: location.name,
+  //     city: location.city,
+  //     state: location.state,
+  //     address: location.address,
+  //     phone: location.phone,
+  //   });
+  //   setShowModal(true);
+  // };
 
   const handleDeleteLocation = (id: number) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
@@ -73,24 +110,31 @@ const Locations = () => {
     setFormData({ ...formData, [name]: name === 'phone' ? Number(value) : value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentLocation) {
-      setLocations({
-        data: locations.map(location =>
-          location.id === currentLocation.id
-            ? { ...location, ...formData }
-            : location
-        )
-      });
-    } else {
-      const newLocation = {
-        id: Date.now(),
-        ...formData,
-      };
-      setLocations({ data: [...locations, newLocation] });
+    setError(null);
+    if (formData.password !== cpassword) {
+      setError('Passwords do not match');
+      return;
     }
-    setShowModal(false);
+    try {
+      const response = await api.post('/locations/', {
+        ...formData
+      });
+      if (response && response.data) {
+        setLocations({ data: [...locations, response.data] });
+        setShowModal(false);
+        setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
+        setcpassword('');
+      }
+    } catch (err: unknown) {
+      if (isApiError(err)) {
+        setError(err.response.data.message);
+      } else {
+        setError('Failed to add location');
+      }
+      console.log(err);
+    }
   };
 
   const filteredLocations = locations.filter(
@@ -98,7 +142,7 @@ const Locations = () => {
       location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       location.address.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
+  console.log(filteredLocations)
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-8">
@@ -119,13 +163,13 @@ const Locations = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <button
+        {user?.is_super_admin && <button
           onClick={handleAddLocation}
           className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
         >
           <FaPlus size={14} />
           <span>Add New Location</span>
-        </button>
+        </button>}
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -166,13 +210,13 @@ const Locations = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
-                        <button 
+                        {/* <button 
                           onClick={() => handleEditLocation(location)}
                           className="text-blue-600 hover:text-blue-800"
                           aria-label="Edit location"
                         >
                           <FaEdit size={18} />
-                        </button>
+                        </button> */}
                         <button 
                           onClick={() => handleDeleteLocation(location.id)}
                           className="text-red-600 hover:text-red-800"
@@ -215,7 +259,7 @@ const Locations = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location Name*
+                  Location Name
                 </label>
                 <input
                   type="text"
@@ -230,7 +274,65 @@ const Locations = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City*
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    name="confirm_password"
+                    value={cpassword}
+                    onChange={(e) => { setcpassword(e.target.value); if (error) setError(null); }}
+                    onBlur={() => {
+                      if (formData.password !== cpassword) {
+                        setError('Passwords do not match');
+                      } else {
+                        setError(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Confirm Password"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number
+                </label>
+                <div className="flex items-center">
+                  <div className="relative w-full">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <FaPhone className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="number"
+                      name="phone"
+                      value={formData.phone === null ? '' : formData.phone}
+                      onChange={handleFormChange}
+                      className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Phone number"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City
                   </label>
                   <input
                     type="text"
@@ -244,7 +346,7 @@ const Locations = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State*
+                    State
                   </label>
                   <input
                     type="text"
@@ -257,9 +359,10 @@ const Locations = () => {
                   />
                 </div>
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Street Address*
+                  Street Address
                 </label>
                 <input
                   type="text"
@@ -271,28 +374,12 @@ const Locations = () => {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number*
-                </label>
-                <div className="flex items-center">
-                  <div className="relative w-full">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaPhone className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                      type="number"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleFormChange}
-                      className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Phone number"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="pt-4 flex justify-end space-x-3 border-t border-gray-200">
+              
+              
+              {error && (
+                <div className="text-red-600 text-sm mb-2">{error}</div>
+              )}
+              <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -302,7 +389,8 @@ const Locations = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500${formData.password !== cpassword ? ' opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={formData.password !== cpassword}
                 >
                   {currentLocation ? 'Update' : 'Add'} Location
                 </button>

@@ -12,7 +12,7 @@ import useLocationStore from '../store/location'
 
 const Dashboard = () => {
     const [isMobile, setIsMobile] = useState(false);
-    const isSuperAdmin = useAccountStore((state) => state.isSuperAdmin);
+    const isSuperAdmin = useAccountStore((state) => state.user?.is_super_admin);
     const location = useLocation();
     
     // Use destructuring in a single line as preferred

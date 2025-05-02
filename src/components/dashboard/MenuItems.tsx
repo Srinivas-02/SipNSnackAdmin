@@ -1,184 +1,161 @@
-import { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaTimes, FaImage } from 'react-icons/fa';
-
-// Mock data
-const initialLocations = [
-  { id: '1', name: 'Downtown Café' },
-  { id: '2', name: 'Beach Corner' },
-  { id: '3', name: 'Central Mall' },
-  { id: '4', name: 'Park Kiosk' },
-  { id: '5', name: 'University Campus' },
-];
-
-const initialMenuItems = [
-  { 
-    id: '1', 
-    name: 'Classic Cappuccino', 
-    description: 'Espresso with steamed milk and a deep layer of foam', 
-    price: 4.50, 
-    category: 'Coffee',
-    image: 'https://images.unsplash.com/photo-1534778101976-62847782c213?q=80&w=150&auto=format&fit=crop',
-    locationId: '1' 
-  },
-  { 
-    id: '2', 
-    name: 'Blueberry Muffin', 
-    description: 'Moist muffin loaded with blueberries', 
-    price: 3.25, 
-    category: 'Bakery',
-    image: 'https://images.unsplash.com/photo-1599583863916-e06c29087f51?q=80&w=150&auto=format&fit=crop',
-    locationId: '1' 
-  },
-  { 
-    id: '3', 
-    name: 'Iced Latte', 
-    description: 'Cold espresso with milk and ice', 
-    price: 5.00, 
-    category: 'Coffee',
-    image: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?q=80&w=150&auto=format&fit=crop',
-    locationId: '2' 
-  },
-  { 
-    id: '4', 
-    name: 'Avocado Toast', 
-    description: 'Fresh avocado on toasted sourdough', 
-    price: 7.95, 
-    category: 'Food',
-    image: 'https://images.unsplash.com/photo-1603046891653-54f45c6ac7e6?q=80&w=150&auto=format&fit=crop',
-    locationId: '3' 
-  },
-  { 
-    id: '5', 
-    name: 'Fresh Fruit Cup', 
-    description: 'Seasonal mixed fruits', 
-    price: 4.99, 
-    category: 'Food',
-    image: 'https://images.unsplash.com/photo-1568158879083-c42860933ed7?q=80&w=150&auto=format&fit=crop',
-    locationId: '5' 
-  },
-];
-
-interface Location {
-  id: string;
-  name: string;
-}
-
-interface MenuItem {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  image: string;
-  locationId: string;
-}
+import { useState } from 'react';
+import { FaPlus, FaEdit, FaTrash, FaTimes, FaImage, FaFolderPlus } from 'react-icons/fa';
+import useLocationStore from '../../store/location';
+import useMenuStore from '../../store/menu';
 
 const MenuItems = () => {
-  const [locations, setLocations] = useState<Location[]>(initialLocations);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
+  // Get locations from store
+  const locations = useLocationStore((state) => state.locations);
+  // Get categoriesByLocation from store
+  const categoriesByLocation = useMenuStore((state) => state.categoriesByLocation);
+
+  // Flatten all menu items from all categories in all locations
+  const menuItems = Object.values(categoriesByLocation)
+    .flat()
+    .flatMap((cat) => cat.menu_items.map((item) => ({
+      ...item,
+      category: cat.name,
+      location_id: cat.location_id,
+    })));
+
+  // Gather all categories for the selected location
+  const getCategoriesForLocation = (locationId: string | number | undefined) => {
+    if (!locationId || locationId === 'all') return [];
+    return categoriesByLocation[Number(locationId)] || [];
+  };
+
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
-  const [currentItem, setCurrentItem] = useState<MenuItem | null>(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [currentItem, setCurrentItem] = useState<{
+    id: number;
+    name: string;
+    price: number;
+    category: string;
+    location_id: number;
+    image?: string | null;
+    description?: string;
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [formData, setFormData] = useState<Omit<MenuItem, 'id'>>({
+  const [formData, setFormData] = useState<{
+    name: string;
+    price: number;
+    category: string;
+    image?: string | null;
+    location_id?: number;
+    description?: string;
+  }>({
     name: '',
-    description: '',
     price: 0,
     category: '',
     image: '',
-    locationId: '',
+    location_id: undefined,
+    description: '',
+  });
+  const [categoryForm, setCategoryForm] = useState<{
+    name: string;
+    location_id?: number;
+    // display_order: number;
+  }>({
+    name: '',
+    location_id: undefined,
+    // display_order: 2,
   });
 
-  // In a real app, would fetch from API
-  useEffect(() => {
-    // const fetchData = async () => {
-    //   try {
-    //     const locationsResponse = await fetch('/api/locations');
-    //     const locationsData = await locationsResponse.json();
-    //     setLocations(locationsData);
-    //
-    //     const menuItemsResponse = await fetch('/api/menu-items');
-    //     const menuItemsData = await menuItemsResponse.json();
-    //     setMenuItems(menuItemsData);
-    //   } catch (error) {
-    //     console.error('Error fetching data:', error);
-    //   }
-    // };
-    // fetchData();
-  }, []);
+  // Handle location change: reset category if location changes
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedLocation(e.target.value);
+    setSelectedCategory('all');
+    setFormData((prev) => ({ ...prev, location_id: e.target.value !== 'all' ? Number(e.target.value) : undefined, category: '' }));
+  };
+
+  // Handle category change
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedCategory(e.target.value);
+  };
 
   const handleAddMenuItem = () => {
     setCurrentItem(null);
     setFormData({
       name: '',
-      description: '',
       price: 0,
       category: '',
       image: '',
-      locationId: selectedLocation !== 'all' ? selectedLocation : '',
+      location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
+      description: '',
     });
     setShowModal(true);
   };
 
-  const handleEditMenuItem = (item: MenuItem) => {
+  const handleEditMenuItem = (item: {
+    id: number;
+    name: string;
+    price: number;
+    category: string;
+    location_id: number;
+    image?: string | null;
+    description?: string;
+  }) => {
     setCurrentItem(item);
     setFormData({
       name: item.name,
-      description: item.description,
       price: item.price,
       category: item.category,
-      image: item.image,
-      locationId: item.locationId,
+      image: item.image ?? '',
+      location_id: item.location_id,
+      description: item.description ?? '',
     });
     setShowModal(true);
   };
 
-  const handleDeleteMenuItem = (id: string) => {
+  // Linter: id is defined but never used (API integration needed)
+  const handleDeleteMenuItem = (id: number) => {
     if (window.confirm('Are you sure you want to delete this menu item?')) {
       // In a real app, would call API to delete
-      setMenuItems(menuItems.filter(item => item.id !== id));
     }
   };
 
+  // Linter: Unexpected any. Specify a different type.
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const updatedValue = name === 'price' ? parseFloat(value) : value;
+    let updatedValue: string | number | undefined = value;
+    if (name === 'price') updatedValue = parseFloat(value);
+    if (name === 'location_id') updatedValue = value ? Number(value) : undefined;
     setFormData({ ...formData, [name]: updatedValue });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (currentItem) {
-      // Edit existing item
-      // In a real app, would call API to update
-      setMenuItems(
-        menuItems.map(item => 
-          item.id === currentItem.id 
-            ? { ...item, ...formData } 
-            : item
-        )
-      );
-    } else {
-      // Add new item
-      const newItem: MenuItem = {
-        id: Date.now().toString(),
-        ...formData,
-      };
-      // In a real app, would call API to create
-      setMenuItems([...menuItems, newItem]);
-    }
-    
+    // API integration for add/edit menu item goes here
     setShowModal(false);
   };
 
+  // Category modal handlers
+  const handleCategoryFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    let updatedValue: string | number | undefined = value;
+    if (name === 'location_id') updatedValue = value ? Number(value) : undefined;
+    setCategoryForm({ ...categoryForm, [name]: updatedValue });
+  };
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    // API integration for add category goes here
+    setShowCategoryModal(false);
+  };
+
+  // Filter menu items by location and category
   const filteredMenuItems = menuItems.filter(
-    item => 
-      (selectedLocation === 'all' || item.locationId === selectedLocation) &&
+    (item) =>
+      (selectedLocation === 'all' || String(item.location_id) === selectedLocation) &&
+      (selectedCategory === 'all' || item.category === selectedCategory) &&
       (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       item.category.toLowerCase().includes(searchTerm.toLowerCase()))
+        (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // Get categories for filter dropdown
+  const categoryOptions = getCategoriesForLocation(selectedLocation);
 
   return (
     <div className="space-y-6">
@@ -186,15 +163,27 @@ const MenuItems = () => {
         <div className="flex flex-col md:flex-row gap-4">
           <select
             value={selectedLocation}
-            onChange={(e) => setSelectedLocation(e.target.value)}
+            onChange={handleLocationChange}
             className="px-4 py-2 border border-gray-300 rounded-md"
           >
             <option value="all">All Locations</option>
             {locations.map((location) => (
-              <option key={location.id} value={location.id}>{location.name}</option>
+              <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
             ))}
           </select>
-          
+
+          <select
+            value={selectedCategory}
+            onChange={handleCategoryChange}
+            className="px-4 py-2 border border-gray-300 rounded-md"
+            disabled={selectedLocation === 'all'}
+          >
+            <option value="all">All Categories</option>
+            {categoryOptions.map((cat) => (
+              <option key={cat.id} value={cat.name}>{cat.name}</option>
+            ))}
+          </select>
+
           <input
             type="text"
             placeholder="Search menu items..."
@@ -203,14 +192,23 @@ const MenuItems = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        
-        <button
-          onClick={handleAddMenuItem}
-          className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-        >
-          <FaPlus size={14} />
-          <span>Add Menu Item</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCategoryModal(true)}
+            className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
+          >
+            <FaFolderPlus size={14} />
+            <span>Add Category</span>
+          </button>
+          <button
+            onClick={handleAddMenuItem}
+            className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+            disabled={selectedLocation === 'all'}
+          >
+            <FaPlus size={14} />
+            <span>Add Menu Item</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -234,11 +232,10 @@ const MenuItems = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-semibold">{item.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">{locations.find(l => l.id === item.locationId)?.name}</p>
+                    <p className="text-sm text-gray-500 mt-1">{locations.find(l => l.id === item.location_id)?.name}</p>
                   </div>
-                  <p className="text-lg font-bold">${item.price.toFixed(2)}</p>
+                  <p className="text-lg font-bold">Rs {item.price.toFixed(2)}</p>
                 </div>
-                <p className="text-sm text-gray-600 mt-2">{item.description}</p>
                 <div className="flex justify-between items-center mt-4">
                   <span className="px-2 py-1 bg-gray-100 text-xs rounded">{item.category}</span>
                   <div className="flex space-x-2">
@@ -281,7 +278,6 @@ const MenuItems = () => {
                 <FaTimes size={20} />
               </button>
             </div>
-            
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
@@ -297,7 +293,6 @@ const MenuItems = () => {
                     required
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Description
@@ -311,10 +306,9 @@ const MenuItems = () => {
                     required
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price ($)
+                    Price (Rs)
                   </label>
                   <input
                     type="number"
@@ -327,21 +321,24 @@ const MenuItems = () => {
                     required
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="category"
                     value={formData.category}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
-                  />
+                    disabled={!formData.location_id}
+                  >
+                    <option value="">Select a category</option>
+                    {getCategoriesForLocation(formData.location_id).map((cat) => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Image URL
@@ -349,32 +346,30 @@ const MenuItems = () => {
                   <input
                     type="text"
                     name="image"
-                    value={formData.image}
+                    value={formData.image ?? ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     placeholder="https://example.com/image.jpg"
                   />
                 </div>
-                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Location
                   </label>
                   <select
-                    name="locationId"
-                    value={formData.locationId}
+                    name="location_id"
+                    value={formData.location_id !== undefined && formData.location_id !== null ? String(formData.location_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
                   >
                     <option value="">Select a location</option>
                     {locations.map((location) => (
-                      <option key={location.id} value={location.id}>{location.name}</option>
+                      <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
                     ))}
                   </select>
                 </div>
               </div>
-              
               <div className="mt-8 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -388,6 +383,87 @@ const MenuItems = () => {
                   className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                 >
                   {currentItem ? 'Update' : 'Add'} Menu Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-semibold">Add New Category</h3>
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddCategory}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={categoryForm.name}
+                    onChange={handleCategoryFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Location
+                  </label>
+                  <select
+                    name="location_id"
+                    value={categoryForm.location_id !== undefined && categoryForm.location_id !== null ? String(categoryForm.location_id) : ''}
+                    onChange={handleCategoryFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                  >
+                    <option value="">Select a location</option>
+                    {locations.map((location) => (
+                      <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/*
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Display Order
+                  </label>
+                  <input
+                    type="number"
+                    name="display_order"
+                    value={categoryForm.display_order}
+                    onChange={handleCategoryFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    min="1"
+                  />
+                </div>
+                */}
+              </div>
+              <div className="mt-8 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600"
+                >
+                  Add Category
                 </button>
               </div>
             </form>
