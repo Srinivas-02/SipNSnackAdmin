@@ -1,4 +1,5 @@
 import {create} from 'zustand'
+import {persist, createJSONStorage} from 'zustand/middleware'
 import api from '../common/api'
 
 interface Location {
@@ -42,50 +43,61 @@ interface FranchiseAdminCreate {
 }
 
 const useLocationStore = create<LocationState>()(
-    (set, get) => ({
-    locations: [],
-    franchiseAdmins: [],
-    loading: false,
-    
-    setLocations: (response: Location[]) => {
-        const locationdata = response
-        set({
-            locations: locationdata
-        })
-    },
-    
-    fetchFranchiseAdmins: async () => {
-        try {
-            set({ loading: true });
-            const response = await api.get('/accounts/franchise-admin/');
-            set({ 
-                franchiseAdmins: response.data,
-                loading: false
-            });
-            return response.data;
-        } catch (error) {
-            console.error('Failed to fetch franchise admins:', error);
-            set({ loading: false });
-            throw error;
-        }
-    },
-    
-    addFranchiseAdmin: async (adminData: FranchiseAdminCreate) => {
-        try {
-            set({ loading: true });
-            const response = await api.post('/accounts/franchise-admin/', adminData);
+    persist(
+        (set, get) => ({
+            locations: [],
+            franchiseAdmins: [],
+            loading: false,
             
-            // After successfully adding, fetch the updated list
-            await get().fetchFranchiseAdmins();
+            setLocations: (response: Location[]) => {
+                const locationdata = response
+                set({
+                    locations: locationdata
+                })
+            },
             
-            set({ loading: false });
-            return response.data;
-        } catch (error) {
-            console.error('Failed to add franchise admin:', error);
-            set({ loading: false });
-            throw error;
+            fetchFranchiseAdmins: async () => {
+                try {
+                    set({ loading: true });
+                    const response = await api.get('/accounts/franchise-admin/');
+                    set({ 
+                        franchiseAdmins: response.data,
+                        loading: false
+                    });
+                    return response.data;
+                } catch (error) {
+                    console.error('Failed to fetch franchise admins:', error);
+                    set({ loading: false });
+                    throw error;
+                }
+            },
+            
+            addFranchiseAdmin: async (adminData: FranchiseAdminCreate) => {
+                try {
+                    set({ loading: true });
+                    const response = await api.post('/accounts/franchise-admin/', adminData);
+                    
+                    // After successfully adding, fetch the updated list
+                    await get().fetchFranchiseAdmins();
+                    
+                    set({ loading: false });
+                    return response.data;
+                } catch (error) {
+                    console.error('Failed to add franchise admin:', error);
+                    set({ loading: false });
+                    throw error;
+                }
+            }
+        }),
+        {
+            name: 'location-storage',
+            storage: createJSONStorage(() => localStorage),
+            partialize: (state) => ({
+                locations: state.locations
+                // Not persisting franchiseAdmins or loading state
+            })
         }
-    }
-}))
+    )
+)
 
 export default useLocationStore

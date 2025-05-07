@@ -7,7 +7,7 @@ import MyLocation from '../components/dashboard/MyLocation';
 import MenuItems from '../components/dashboard/MenuItems';
 import Orders from '../components/dashboard/Orders';
 import Feedback from '../components/dashboard/Feedback';
-import Users from '../components/dashboard/Users';
+import Staff from '../components/dashboard/Staff';
 import Analytics from '../components/dashboard/Analytics';
 import Settings from '../components/dashboard/Settings';
 import useAccountStore from '../store/account';
@@ -58,9 +58,9 @@ const Dashboard = () => {
             '/dashboard/locations': 'Manage Franchise Locations',
             '/dashboard/my-location': 'My Location',
             '/dashboard/menu-items': 'Menu Items',
-            '/dashboard/orders': 'Order Management',
+            '/dashboard/orders': 'Order History',
             '/dashboard/feedback': 'Customer Feedback',
-            '/dashboard/users': 'User Management',
+            '/dashboard/users': 'Staff Management',
             '/dashboard/analytics': 'Analytics',
             '/dashboard/settings': 'System Settings'
         };
@@ -110,7 +110,7 @@ const Dashboard = () => {
                             path="/users" 
                             element={
                                 checkPermission('/dashboard/users') 
-                                    ? <Users /> 
+                                    ? <Staff /> 
                                     : <Navigate to="/dashboard" replace />
                             } 
                         />

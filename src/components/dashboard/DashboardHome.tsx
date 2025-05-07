@@ -1,153 +1,236 @@
 import { useState, useEffect } from 'react';
-import { FaStore, FaUtensils, FaShoppingCart, FaUsers } from 'react-icons/fa';
-
-// Mock data - in a real app, this would come from an API
-const mockData = {
-  totalLocations: 12,
-  totalMenuItems: 146,
-  totalOrders: 2543,
-  totalCustomers: 1830,
-  recentOrders: [
-    { id: '1001', location: 'Downtown Café', items: 3, total: 15.99, status: 'Completed', date: '2025-04-05' },
-    { id: '1002', location: 'Beach Corner', items: 1, total: 5.49, status: 'Completed', date: '2025-04-05' },
-    { id: '1003', location: 'Central Mall', items: 5, total: 27.35, status: 'In Progress', date: '2025-04-05' },
-    { id: '1004', location: 'Park Kiosk', items: 2, total: 8.99, status: 'Completed', date: '2025-04-04' },
-    { id: '1005', location: 'University Campus', items: 4, total: 18.75, status: 'Cancelled', date: '2025-04-04' },
-  ],
-  locationPerformance: [
-    { name: 'Downtown Café', revenue: 3245.78, orders: 321 },
-    { name: 'Beach Corner', revenue: 2187.45, orders: 186 },
-    { name: 'Central Mall', revenue: 4532.21, orders: 428 },
-    { name: 'Park Kiosk', revenue: 1783.55, orders: 201 },
-    { name: 'University Campus', revenue: 3098.32, orders: 287 },
-  ]
-};
+import { FaStore, FaUtensils, FaShoppingCart, FaUsers, FaChartLine } from 'react-icons/fa';
+import useOrdersStore from '../../store/orders';
+import useLocationStore from '../../store/locations';
+import useAccountStore from '../../store/account';
+import { format } from 'date-fns';
 
 const DashboardHome = () => {
-  const [dashboardData, setDashboardData] = useState(mockData);
+  const { orders, fetchOrders } = useOrdersStore();
+  const { locations, fetchLocations } = useLocationStore();
+  const { user } = useAccountStore();
   
-  // In a real app, we would fetch data here
-  useEffect(() => {
-    // Example API call
-    // const fetchData = async () => {
-    //   try {
-    //     const response = await fetch('/api/dashboard');
-    //     const data = await response.json();
-    //     setDashboardData(data);
-    //   } catch (error) {
-    //     console.error('Error fetching dashboard data:', error);
-    //   }
-    // };
-    // fetchData();
-  }, []);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    totalRevenue: 0,
+    activeLocations: 0,
+    averageOrderValue: 0
+  });
 
-  const StatCard = ({ title, value, icon, color }: { title: string, value: number, icon: JSX.Element, color: string }) => (
-    <div className={`bg-white p-6 rounded-lg shadow-sm border-l-4 ${color}`}>
-      <div className="flex justify-between items-center">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="text-2xl font-semibold mt-1">{value}</p>
-        </div>
-        <div className={`${color.replace('border-', 'text-')} bg-opacity-20 p-3 rounded-full`}>
-          {icon}
-        </div>
+  // Fetch dashboard data on component mount
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([
+          fetchOrders(),
+          fetchLocations()
+        ]);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, [fetchOrders, fetchLocations]);
+
+  // Calculate dashboard stats whenever orders or locations change
+  useEffect(() => {
+    if (orders.length > 0) {
+      // Get recent orders (last 5)
+      const recent = [...orders].sort((a, b) => 
+        new Date(b.order_date).getTime() - new Date(a.order_date).getTime()
+      ).slice(0, 5);
+      
+      setRecentOrders(recent);
+      
+      // Calculate total revenue
+      const revenue = orders.reduce((sum, order) => sum + order.total_amount, 0);
+      
+      // Set stats
+      setStats({
+        totalOrders: orders.length,
+        totalRevenue: revenue,
+        activeLocations: locations.filter(loc => loc.is_active).length,
+        averageOrderValue: orders.length > 0 ? revenue / orders.length : 0
+      });
+    }
+  }, [orders, locations]);
+
+  const formatDate = (dateString) => {
+    try {
+      return format(new Date(dateString), 'MMM dd, yyyy • HH:mm');
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Locations" 
-          value={dashboardData.totalLocations} 
-          icon={<FaStore size={24} />} 
-          color="border-blue-500" 
-        />
-        <StatCard 
-          title="Total Menu Items" 
-          value={dashboardData.totalMenuItems} 
-          icon={<FaUtensils size={24} />} 
-          color="border-green-500" 
-        />
-        <StatCard 
-          title="Total Orders" 
-          value={dashboardData.totalOrders} 
-          icon={<FaShoppingCart size={24} />} 
-          color="border-orange-500" 
-        />
-        <StatCard 
-          title="Total Customers" 
-          value={dashboardData.totalCustomers} 
-          icon={<FaUsers size={24} />} 
-          color="border-purple-500" 
-        />
-      </div>
-
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Recent Orders</h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {dashboardData.recentOrders.map((order) => (
-                <tr key={order.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{order.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.location}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.items}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.total.toFixed(2)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                      ${order.status === 'Completed' ? 'bg-green-100 text-green-800' : 
-                        order.status === 'In Progress' ? 'bg-blue-100 text-blue-800' : 
-                        'bg-red-100 text-red-800'}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{order.date}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-blue-100 text-blue-600">
+              <FaShoppingCart size={24} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-500 uppercase">Total Orders</p>
+              <h3 className="text-2xl font-bold text-gray-800">{stats.totalOrders}</h3>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-green-100 text-green-600">
+              <FaChartLine size={24} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-500 uppercase">Total Revenue</p>
+              <h3 className="text-2xl font-bold text-gray-800">Rs {stats.totalRevenue.toFixed(2)}</h3>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-orange-100 text-orange-600">
+              <FaStore size={24} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-500 uppercase">Active Locations</p>
+              <h3 className="text-2xl font-bold text-gray-800">{stats.activeLocations}</h3>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-purple-100 text-purple-600">
+              <FaUtensils size={24} />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-500 uppercase">Avg. Order Value</p>
+              <h3 className="text-2xl font-bold text-gray-800">Rs {stats.averageOrderValue.toFixed(2)}</h3>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Location Performance</h2>
+      
+      {/* Recent Orders */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-800">Recent Orders</h2>
+        </div>
+        
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orders</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Order Value</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {dashboardData.locationPerformance.map((location, idx) => (
-                <tr key={idx}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{location.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${location.revenue.toFixed(2)}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{location.orders}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${(location.revenue / location.orders).toFixed(2)}
-                  </td>
+          {recentOrders.length === 0 ? (
+            <div className="text-center py-6 text-gray-500">No recent orders found</div>
+          ) : (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Order #
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Location
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Amount
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {recentOrders.map((order) => (
+                  <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {order.order_number}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(order.order_date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {order.location_name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      Rs {order.total_amount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+      
+      {/* Locations Overview (for Super Admin) */}
+      {user && user.is_super_admin && locations.length > 0 && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-800">Locations Overview</h2>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Address
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    City
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {locations.map((location) => (
+                  <tr key={location.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {location.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {location.address}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {location.city}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        location.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {location.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

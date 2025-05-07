@@ -73,7 +73,7 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       roles: ['super', 'franchise'] // Both super and franchise admin can see feedback
     },
     { 
-      name: 'Users', 
+      name: 'Staff', 
       path: '/dashboard/users', 
       icon: <FaUsers size={20} />,
       roles: ['super'] // Only super admin can manage users

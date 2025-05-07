@@ -1,4 +1,5 @@
 import {create} from 'zustand'
+import {persist, createJSONStorage} from 'zustand/middleware'
 import api from '../common/api'
 
 export interface User {
@@ -27,78 +28,69 @@ interface AccountState {
     initializeFromStorage: () => void,
 }
 
-const useAccountStore = create<AccountState>()((set) => ({
-    isAuthenticated: false,
-    refresh_token: null,
-    access_token: null,
-    user: null,
-    
-    setDetails: (response: AuthResponse) => {
-        // Set tokens in localStorage for persistence
-        localStorage.setItem('access_token', response.access);
-        localStorage.setItem('refresh_token', response.refresh);
-        
-        // Store user data in localStorage
-        localStorage.setItem('user', JSON.stringify(response.user));
-        
-        // Update API header
-        api.defaults.headers.common['Authorization'] = `Bearer ${response.access}`;
-        
-        // Update store state
-        set({
-            isAuthenticated: true,
-            refresh_token: response.refresh,
-            access_token: response.access,
-            user: response.user
-        });
-    },
-    
-    logout: () => {
-        // Clear localStorage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-        
-        // Clear authorization header
-        delete api.defaults.headers.common['Authorization'];
-        
-        // Reset store state
-        set({
+const useAccountStore = create<AccountState>()(
+    persist(
+        (set) => ({
             isAuthenticated: false,
             refresh_token: null,
             access_token: null,
-            user: null
-        });
-    },
-    
-    initializeFromStorage: () => {
-        // Try to restore session from localStorage
-        const access_token = localStorage.getItem('access_token');
-        const refresh_token = localStorage.getItem('refresh_token');
-        const userString = localStorage.getItem('user');
-        
-        if (access_token && refresh_token && userString) {
-            try {
-                const user = JSON.parse(userString) as User;
-                
-                // Set authorization header
-                api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+            user: null,
+            
+            setDetails: (response: AuthResponse) => {
+                // Update API header
+                api.defaults.headers.common['Authorization'] = `Bearer ${response.access}`;
                 
                 // Update store state
                 set({
                     isAuthenticated: true,
-                    access_token,
-                    refresh_token,
-                    user
+                    refresh_token: response.refresh,
+                    access_token: response.access,
+                    user: response.user
                 });
-            } catch (error) {
-                // If parsing fails, clear storage
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                localStorage.removeItem('user');
-            }
-        }
-    }
-}))
+            },
+            
+            logout: () => {
+                // Clear authorization header
+                delete api.defaults.headers.common['Authorization'];
+                
+                // Reset store state
+                set({
+                    isAuthenticated: false,
+                    refresh_token: null,
+                    access_token: null,
+                    user: null
+                });
+            },
 
-export default useAccountStore
+            initializeFromStorage: () => {
+                const state = useAccountStore.getState();
+                if (state.access_token) {
+                    api.defaults.headers.common['Authorization'] = `Bearer ${state.access_token}`;
+                }
+            }
+        }),
+        {
+            name: 'account-storage', // unique name for the localStorage key
+            storage: createJSONStorage(() => localStorage),
+            partialize: (state) => ({
+                isAuthenticated: state.isAuthenticated,
+                refresh_token: state.refresh_token,
+                access_token: state.access_token,
+                user: state.user
+            })
+        }
+    )
+)
+
+// Set authorization header on app initialization if token exists
+const initializeAuth = () => {
+    const state = useAccountStore.getState();
+    if (state.access_token) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${state.access_token}`;
+    }
+};
+
+// Call this once when the app starts
+initializeAuth();
+
+export default useAccountStore  
