@@ -24,7 +24,7 @@ const DashboardHome = () => {
     const loadDashboardData = async () => {
       setIsLoading(true);
       try {
-        await Promise.all([pi
+        await Promise.all([
           fetchOrders(),
           fetchLocations()
         ]);
