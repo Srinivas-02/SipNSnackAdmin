@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaStore, FaUtensils, FaShoppingCart, FaUsers, FaChartLine } from 'react-icons/fa';
 import useOrdersStore from '../../store/orders';
-import useLocationStore from '../../store/locations';
+import useLocationStore from '../../store/location';
 import useAccountStore from '../../store/account';
 import { format } from 'date-fns';
 
@@ -24,7 +24,7 @@ const DashboardHome = () => {
     const loadDashboardData = async () => {
       setIsLoading(true);
       try {
-        await Promise.all([
+        await Promise.all([pi
           fetchOrders(),
           fetchLocations()
         ]);
