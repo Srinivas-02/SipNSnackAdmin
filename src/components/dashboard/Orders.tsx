@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FaFilter, FaEye, FaFileAlt } from 'react-icons/fa';
 import { format } from 'date-fns';
 import useOrdersStore from '../../store/orders';
-import useLocationStore, { Location } from '../../store/locations';
+import useLocationStore, { Location } from '../../store/location';
 
 const Orders = () => {
   const { 

@@ -1,5 +1,5 @@
 import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding, FaUserShield } from 'react-icons/fa';
-import useLocationStore from '../../store/location'
+import useLocationStore,{Location} from '../../store/location'
 import useAccountStore from '../../store/account'
 import { useState, useEffect } from 'react';
 import api from '../../common/api'
@@ -151,7 +151,13 @@ const Locations = () => {
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: name === 'phone' ? Number(value) : value });
+    if (name === 'phone') {
+      // Only allow numeric input for phone
+      const numericValue = value.replace(/\D/g, '');
+      setFormData({ ...formData, [name]: numericValue ? Number(numericValue) : null });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -191,7 +197,7 @@ const Locations = () => {
         ...formData
       });
       if (response && response.data) {
-        setLocations([...locations, response.data]);
+        setLocations([...locations, {id: response.data.id, ...formData} as Location]);
         setShowModal(false);
         setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
         setcpassword('');
@@ -448,12 +454,14 @@ const Locations = () => {
                       <FaPhone className="h-4 w-4 text-gray-400" />
                     </div>
                     <input
-                      type="number"
+                      type="tel"
                       name="phone"
                       value={formData.phone === null ? '' : formData.phone}
                       onChange={handleFormChange}
                       className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Phone number"
+                      pattern="[0-9]*"
+                      inputMode="numeric"
                       required
                     />
                   </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FaEdit, FaTrash, FaUserPlus, FaCheck, FaTimes, FaFilter } from 'react-icons/fa';
 import api from '../../common/api';
 import { User } from '../../store/account';
-import useLocationStore from '../../store/locations';
+import useLocationStore from '../../store/location';
 
 interface UserWithLocation extends User {
   locations?: { id: number; name: string }[];

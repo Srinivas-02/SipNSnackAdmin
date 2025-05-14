@@ -2,13 +2,13 @@ import {create} from 'zustand'
 import {persist, createJSONStorage} from 'zustand/middleware'
 import api from '../common/api'
 
-interface Location {
+export interface Location {
     id: number,
     name: string,
     city: string,
     state: string,
     address: string,
-    phone: number
+    phone: string | number
 }
 
 interface LocationBasic {
@@ -24,16 +24,6 @@ interface FranchiseAdmin {
     locations: LocationBasic[]
 }
 
-
-interface LocationState {
-    locations: Location[],
-    franchiseAdmins: FranchiseAdmin[],
-    loading: boolean,
-    setLocations: (response: Location[]) => void,
-    fetchFranchiseAdmins: () => Promise<void>,
-    addFranchiseAdmin: (adminData: FranchiseAdminCreate) => Promise<FranchiseAdmin | null>,
-}
-
 interface FranchiseAdminCreate {
     email: string,
     password: string,
@@ -42,18 +32,49 @@ interface FranchiseAdminCreate {
     location_ids: number[]
 }
 
+interface LocationState {
+    locations: Location[],
+    franchiseAdmins: FranchiseAdmin[],
+    loading: boolean,
+    isLoading: boolean,
+    error: string | null,
+    
+    // Actions
+    setLocations: (response: Location[]) => void,
+    fetchLocations: () => Promise<void>,
+    fetchFranchiseAdmins: () => Promise<void>,
+    addFranchiseAdmin: (adminData: FranchiseAdminCreate) => Promise<FranchiseAdmin | null>,
+    getLocationById: (id: number) => Location | undefined,
+}
+
 const useLocationStore = create<LocationState>()(
     persist(
         (set, get) => ({
             locations: [],
             franchiseAdmins: [],
             loading: false,
+            isLoading: false,
+            error: null,
             
             setLocations: (response: Location[]) => {
-                const locationdata = response
                 set({
-                    locations: locationdata
+                    locations: response
                 })
+            },
+            
+            fetchLocations: async () => {
+                try {
+                    set({ isLoading: true, error: null });
+                    
+                    const response = await api.get('/locations/');
+                    set({ locations: response.data, isLoading: false });
+                } catch (error) {
+                    console.error('Failed to fetch locations:', error);
+                    set({ 
+                        error: 'Failed to load locations. Please try again.', 
+                        isLoading: false 
+                    });
+                }
             },
             
             fetchFranchiseAdmins: async () => {
@@ -87,7 +108,11 @@ const useLocationStore = create<LocationState>()(
                     set({ loading: false });
                     throw error;
                 }
-            }
+            },
+            
+            getLocationById: (id: number) => {
+                return get().locations.find(location => location.id === id);
+            },
         }),
         {
             name: 'location-storage',
