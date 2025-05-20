@@ -8,7 +8,8 @@ export interface Location {
     city: string,
     state: string,
     address: string,
-    phone: string | number
+    phone: string | number,
+    status: 'active' | 'inactive' | 'pending'
 }
 
 interface LocationBasic {
@@ -45,9 +46,13 @@ interface LocationState {
     fetchFranchiseAdmins: () => Promise<void>,
     addFranchiseAdmin: (adminData: FranchiseAdminCreate) => Promise<FranchiseAdmin | null>,
     getLocationById: (id: number) => Location | undefined,
+    addLocation: (locationData: Omit<Location, 'id'>) => Promise<Location | null>,
+    updateLocation: (locationData: Location) => Promise<Location | null>,
+    deleteLocation: (id: number) => Promise<void>,
+    fetchLocationById: (id: number) => Promise<Location | undefined>,
 }
 
-const useLocationStore = create<LocationState>()(
+export const useLocationStore = create<LocationState>()(
     persist(
         (set, get) => ({
             locations: [],
@@ -68,12 +73,14 @@ const useLocationStore = create<LocationState>()(
                     
                     const response = await api.get('/locations/');
                     set({ locations: response.data, isLoading: false });
+                    return response.data;
                 } catch (error) {
                     console.error('Failed to fetch locations:', error);
                     set({ 
                         error: 'Failed to load locations. Please try again.', 
                         isLoading: false 
                     });
+                    throw error;
                 }
             },
             
@@ -112,6 +119,75 @@ const useLocationStore = create<LocationState>()(
             
             getLocationById: (id: number) => {
                 return get().locations.find(location => location.id === id);
+            },
+
+            addLocation: async (locationData: Omit<Location, 'id'>) => {
+                try {
+                    set({ loading: true });
+                    const response = await api.post('/locations/', locationData);
+                    const newLocation = response.data;
+                    
+                    // Update the locations list with the complete location data
+                    set(state => ({
+                        locations: [...state.locations, { ...locationData, id: newLocation.id } as Location],
+                        loading: false
+                    }));
+                    
+                    return { ...locationData, id: newLocation.id } as Location;
+                } catch (error) {
+                    console.error('Failed to add location:', error);
+                    set({ loading: false });
+                    throw error;
+                }
+            },
+
+            updateLocation: async (locationData: Location) => {
+                try {
+                    set({ loading: true });
+                    const response = await api.patch(`/locations/?id=${locationData.id}`, locationData);
+                    const updatedLocation = response.data;
+                    
+                    // Update the locations list with the complete location data
+                    set(state => ({
+                        locations: state.locations.map(loc => 
+                            loc.id === locationData.id ? { ...loc, ...locationData } : loc
+                        ),
+                        loading: false
+                    }));
+                    
+                    return updatedLocation;
+                } catch (error) {
+                    console.error('Failed to update location:', error);
+                    set({ loading: false });
+                    throw error;
+                }
+            },
+
+            deleteLocation: async (id: number) => {
+                try {
+                    set({ loading: true });
+                    await api.delete(`/locations/?id=${id}`);
+                    
+                    // Update the locations list
+                    set(state => ({
+                        locations: state.locations.filter(loc => loc.id !== id),
+                        loading: false
+                    }));
+                } catch (error) {
+                    console.error('Failed to delete location:', error);
+                    set({ loading: false });
+                    throw error;
+                }
+            },
+
+            fetchLocationById: async (id: number) => {
+                try {
+                    const response = await api.get(`/locations/?id=${id}`);
+                    return response.data;
+                } catch (error) {
+                    console.error('Error fetching location by ID:', error);
+                    throw error;
+                }
             },
         }),
         {

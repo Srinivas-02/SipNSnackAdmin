@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FaStore, FaUtensils, FaShoppingCart, FaUsers, FaChartLine } from 'react-icons/fa';
-import useOrdersStore from '../../store/orders';
-import useLocationStore from '../../store/location';
+import useOrdersStore, { Order } from '../../store/orders';
+import useLocationStore, { Location } from '../../store/location';
 import useAccountStore from '../../store/account';
 import { format } from 'date-fns';
 
@@ -10,7 +10,7 @@ const DashboardHome = () => {
   const { locations, fetchLocations } = useLocationStore();
   const { user } = useAccountStore();
   
-  const [recentOrders, setRecentOrders] = useState([]);
+  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalOrders: 0,
@@ -55,13 +55,13 @@ const DashboardHome = () => {
       setStats({
         totalOrders: orders.length,
         totalRevenue: revenue,
-        activeLocations: locations.filter(loc => loc.is_active).length,
+        activeLocations: locations.filter(loc => loc.status === 'active').length,
         averageOrderValue: orders.length > 0 ? revenue / orders.length : 0
       });
     }
   }, [orders, locations]);
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), 'MMM dd, yyyy • HH:mm');
     } catch (e) {
@@ -219,9 +219,9 @@ const DashboardHome = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        location.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        location.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
-                        {location.is_active ? 'Active' : 'Inactive'}
+                        {location.status === 'active' ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                   </tr>

@@ -9,7 +9,8 @@ export interface User {
     last_name: string,
     is_super_admin: boolean,
     is_franchise_admin: boolean,
-    is_staff_member: boolean
+    is_staff_member: boolean,
+    assigned_locations?: { id: number, name: string }[]
 }
 
 interface AuthResponse {

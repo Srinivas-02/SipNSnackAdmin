@@ -1,10 +1,22 @@
-import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding, FaUserShield } from 'react-icons/fa';
-import useLocationStore,{Location} from '../../store/location'
-import useAccountStore from '../../store/account'
+import { FaPlus, FaTrash, FaTimes, FaMapMarkerAlt, FaBuilding, FaUserShield, FaEdit } from 'react-icons/fa';
+import useLocationStore from '../../store/location';
+import useAccountStore from '../../store/account';
 import { useState, useEffect } from 'react';
-import api from '../../common/api'
+import api from '../../common/api';
 
-function isApiError(err: unknown): err is { response: { data: { message: string } } } {
+// Define Location type to match backend LocationModel
+interface Location {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  phone: string | number;
+  password?: string;
+  status: 'active' | 'inactive' | 'pending';
+}
+
+function isApiError(err: unknown): err is { response: { data: { error?: string; message?: string } } } {
   if (
     typeof err === 'object' &&
     err !== null &&
@@ -20,8 +32,7 @@ function isApiError(err: unknown): err is { response: { data: { message: string 
       if (
         typeof data === 'object' &&
         data !== null &&
-        'message' in data &&
-        typeof (data as { message?: unknown }).message === 'string'
+        ('error' in data || 'message' in data)
       ) {
         return true;
       }
@@ -31,41 +42,39 @@ function isApiError(err: unknown): err is { response: { data: { message: string 
 }
 
 const Locations = () => {
-  const [cpassword, setcpassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [cpassword, setcpassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const locations = useLocationStore((state) => state.locations) || [];
   const franchiseAdmins = useLocationStore((state) => state.franchiseAdmins) || [];
   const loading = useLocationStore((state) => state.loading);
   const fetchFranchiseAdmins = useLocationStore((state) => state.fetchFranchiseAdmins);
   const addFranchiseAdmin = useLocationStore((state) => state.addFranchiseAdmin);
-  const user = useAccountStore((state) => state.user)
-  const setLocations = useLocationStore((state) => state.setLocations);
+  const addLocation = useLocationStore((state) => state.addLocation);
+  const updateLocation = useLocationStore((state) => state.updateLocation);
+  const deleteLocation = useLocationStore((state) => state.deleteLocation);
+  const { user } = useAccountStore();
   const [showModal, setShowModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<null | {
-    id: number;
-    name: string;
-    city: string;
-    state: string;
-    address: string;
-    phone: number;
-  }>(null);
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState<{
+    id?: number;
     name: string;
+    address: string;
     city: string;
     state: string;
-    address: string;
-    phone: null | number;
-    password : string;
+    phone: string;
+    password?: string;
+    status: 'active' | 'inactive' | 'pending';
   }>({
     name: '',
+    address: '',
     city: '',
     state: '',
-    address: '',
-    phone: null,
+    phone: '',
     password: '',
+    status: 'active'
   });
 
   const [adminFormData, setAdminFormData] = useState<{
@@ -83,15 +92,25 @@ const Locations = () => {
   });
 
   useEffect(() => {
-    // Fetch franchise admins when component mounts
-    fetchFranchiseAdmins().catch(console.error);
+    fetchFranchiseAdmins().catch((err) => {
+      console.error('Failed to fetch franchise admins:', err);
+      setError('Failed to load franchise admins');
+    });
   }, [fetchFranchiseAdmins]);
 
   useEffect(() => {
     if (!showModal) {
-      setFormData({ name: '', city: '', state: '', address: '', phone: null , password: '' });
-      setcpassword('')
-      setError('')
+      setFormData({
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        phone: '',
+        password: '',
+        status: 'active'
+      });
+      setcpassword('');
+      setError('');
       setCurrentLocation(null);
     }
   }, [showModal]);
@@ -105,74 +124,80 @@ const Locations = () => {
         last_name: '',
         location_ids: [],
       });
-      setcpassword('')
-      setError('')
+      setcpassword('');
+      setError('');
     }
   }, [showAdminModal]);
 
   const handleAddLocation = () => {
     setCurrentLocation(null);
-    setFormData({ name: '', city: '', state: '', address: '', phone: null , password: ''});
-    setError('')
-    setcpassword('')
+    setFormData({
+      name: '',
+      address: '',
+      city: '',
+      state: '',
+      phone: '',
+      password: '',
+      status: 'active'
+    });
+    setError('');
+    setcpassword('');
     setShowModal(true);
   };
 
   const handleAddAdmin = () => {
-    setError('')
-    setcpassword('')
+    setError('');
+    setcpassword('');
     setShowAdminModal(true);
   };
 
-  // const handleEditLocation = (location: {
-  //   id: number;
-  //   name: string;
-  //   city: string;
-  //   state: string;
-  //   address: string;
-  //   phone: number;
-  // }) => {
-  //   setCurrentLocation(location);
-  //   setFormData({
-  //     name: location.name,
-  //     city: location.city,
-  //     state: location.state,
-  //     address: location.address,
-  //     phone: location.phone,
-  //   });
-  //   setShowModal(true);
-  // };
+  const handleEditLocation = (location: Location) => {
+    setCurrentLocation(location);
+    setFormData({
+      id: location.id,
+      name: location.name,
+      address: location.address,
+      city: location.city,
+      state: location.state,
+      phone: location.phone.toString(),
+      password: '',
+      status: location.status
+    });
+    setcpassword('');
+    setError('');
+    setShowModal(true);
+  };
 
-  const handleDeleteLocation = (id: number) => {
+  const handleDeleteLocation = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
-      setLocations(locations.filter(location => location.id !== id) );
+      try {
+        await deleteLocation(id);
+      } catch (err: unknown) {
+        console.error('Failed to delete location:', err);
+        if (isApiError(err)) {
+          setError(err.response?.data?.error || err.response?.data?.message || 'Failed to delete location');
+        } else {
+          setError('Failed to delete location');
+        }
+      }
     }
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'phone') {
-      // Only allow numeric input for phone
-      const numericValue = value.replace(/\D/g, '');
-      setFormData({ ...formData, [name]: numericValue ? Number(numericValue) : null });
-    } else {
-      setFormData({ ...formData, [name]: value });
-    }
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
     if (name === 'location_ids' && e.target instanceof HTMLSelectElement) {
       const options = e.target.options;
       const selectedValues: number[] = [];
-      
       for (let i = 0; i < options.length; i++) {
         if (options[i].selected) {
           selectedValues.push(Number(options[i].value));
         }
       }
-      
       setAdminFormData(prev => ({
         ...prev,
         location_ids: selectedValues
@@ -188,44 +213,52 @@ const Locations = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (formData.password !== cpassword) {
+    if (formData.password && formData.password !== cpassword) {
       setError('Passwords do not match');
       return;
     }
     try {
-      const response = await api.post('/locations/', {
-        ...formData
-      });
-      if (response && response.data) {
-        setLocations([...locations, {id: response.data.id, ...formData} as Location]);
+      if (currentLocation) {
+        const payload = { ...formData, id: currentLocation.id };
+        await updateLocation(payload);
         setShowModal(false);
-        setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
-        setcpassword('');
-      }
-    } catch (err: unknown) {
-      if (isApiError(err)) {
-        setError(err.response.data.message);
       } else {
-        setError('Failed to add location');
+        const newLocation = await addLocation(formData);
+        if (newLocation) {
+          setShowModal(false);
+        }
       }
-      console.log(err);
+      setFormData({
+        name: '',
+        address: '',
+        city: '',
+        state: '',
+        phone: '',
+        password: '',
+        status: 'active'
+      });
+      setcpassword('');
+    } catch (err: unknown) {
+      console.error('API error:', err);
+      if (isApiError(err)) {
+        setError(err.response.data.error || err.response.data.message || 'Failed to process request');
+      } else {
+        setError(currentLocation ? 'Failed to update location' : 'Failed to add location');
+      }
     }
   };
 
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    
     if (adminFormData.password !== cpassword) {
       setError('Passwords do not match');
       return;
     }
-    
     if (adminFormData.location_ids.length === 0) {
       setError('Please select at least one location');
       return;
     }
-    
     try {
       await addFranchiseAdmin(adminFormData);
       setShowAdminModal(false);
@@ -239,20 +272,31 @@ const Locations = () => {
       setcpassword('');
     } catch (err: unknown) {
       if (isApiError(err)) {
-        setError(err.response.data.message);
+        setError(err.response.data.error || err.response.data.message || 'Failed to add franchise admin');
       } else {
         setError('Failed to add franchise admin');
       }
-      console.log(err);
     }
   };
 
   const filteredLocations = locations.filter(
     location =>
-      location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      location.address.toLowerCase().includes(searchTerm.toLowerCase())
+      (location.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (location.address?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
-  
+
+  // Determine if user can edit a specific location
+  const canEditLocation = (location: Location) => {
+    if (user?.is_super_admin) return true;
+    if (user?.is_franchise_admin) {
+      // Check if the location is assigned to the franchise admin
+      return franchiseAdmins.some(
+        admin => admin.email === user.email && admin.locations.some(loc => loc.id === location.id)
+      );
+    }
+    return false;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-8">
@@ -274,23 +318,32 @@ const Locations = () => {
           />
         </div>
         <div className="flex gap-3">
-          {user?.is_super_admin && <button
-            onClick={handleAddLocation}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-          >
-            <FaPlus size={14} />
-            <span>Add New Location</span>
-          </button>}
-          
-          {user?.is_super_admin && <button
-            onClick={handleAddAdmin}
-            className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-          >
-            <FaUserShield size={14} />
-            <span>Add Franchise Admin</span>
-          </button>}
+          {user?.is_super_admin && (
+            <button
+              onClick={handleAddLocation}
+              className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+            >
+              <FaPlus size={14} />
+              <span>Add New Location</span>
+            </button>
+          )}
+          {user?.is_super_admin && (
+            <button
+              onClick={handleAddAdmin}
+              className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+            >
+              <FaUserShield size={14} />
+              <span>Add Franchise Admin</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
@@ -301,7 +354,6 @@ const Locations = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">City</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">State</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Franchise Admins</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -323,12 +375,6 @@ const Locations = () => {
                     <td className="px-6 py-4 whitespace-nowrap">{location.city}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{location.state}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{location.address}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm text-gray-500">
-                        <FaPhone className="mr-2 text-gray-400" size={14} />
-                        {location.phone}
-                      </div>
-                    </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col space-y-1 text-sm text-gray-500">
                         {franchiseAdmins
@@ -346,27 +392,31 @@ const Locations = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
-                        {/* <button 
-                          onClick={() => handleEditLocation(location)}
-                          className="text-blue-600 hover:text-blue-800"
-                          aria-label="Edit location"
-                        >
-                          <FaEdit size={18} />
-                        </button> */}
-                        <button 
-                          onClick={() => handleDeleteLocation(location.id)}
-                          className="text-red-600 hover:text-red-800"
-                          aria-label="Delete location"
-                        >
-                          <FaTrash size={18} />
-                        </button>
+                        {canEditLocation(location) && (
+                          <button
+                            onClick={() => handleEditLocation(location)}
+                            className="text-blue-600 hover:text-blue-800"
+                            aria-label="Edit location"
+                          >
+                            <FaEdit size={18} />
+                          </button>
+                        )}
+                        {user?.is_super_admin && (
+                          <button
+                            onClick={() => handleDeleteLocation(location.id)}
+                            className="text-red-600 hover:text-red-800"
+                            aria-label="Delete location"
+                          >
+                            <FaTrash size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-sm text-gray-500 text-center">
+                  <td colSpan={6} className="px-6 py-8 text-sm text-gray-500 text-center">
                     {loading ? 'Loading locations...' : 'No locations found matching your search'}
                   </td>
                 </tr>
@@ -384,7 +434,7 @@ const Locations = () => {
               <h3 className="text-xl font-semibold text-gray-900">
                 {currentLocation ? 'Edit Location' : 'Add New Location'}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="Close modal"
@@ -407,65 +457,19 @@ const Locations = () => {
                   required
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter password"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    name="confirm_password"
-                    value={cpassword}
-                    onChange={(e) => { setcpassword(e.target.value); if (error) setError(null); }}
-                    onBlur={() => {
-                      if (formData.password !== cpassword) {
-                        setError('Passwords do not match');
-                      } else {
-                        setError(null);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Confirm Password"
-                    required
-                  />
-                </div>
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone Number
+                  Street Address
                 </label>
-                <div className="flex items-center">
-                  <div className="relative w-full">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FaPhone className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone === null ? '' : formData.phone}
-                      onChange={handleFormChange}
-                      className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Phone number"
-                      pattern="[0-9]*"
-                      inputMode="numeric"
-                      required
-                    />
-                  </div>
-                </div>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleFormChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Street, Building number, etc."
+                  required
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -497,23 +501,60 @@ const Locations = () => {
                   />
                 </div>
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Street Address
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Street, Building number, etc."
-                  required
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter phone"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password || ''}
+                    onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter password"
+                  />
+                </div>
               </div>
-              
-              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    name="confirm_password"
+                    value={cpassword}
+                    onChange={(e) => {
+                      setcpassword(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    onBlur={() => {
+                      if (formData.password && formData.password !== cpassword) {
+                        setError('Passwords do not match');
+                      } else {
+                        setError(null);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Confirm Password"
+                  />
+                </div>
+              </div>
               {error && (
                 <div className="text-red-600 text-sm mb-2">{error}</div>
               )}
@@ -527,8 +568,10 @@ const Locations = () => {
                 </button>
                 <button
                   type="submit"
-                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500${formData.password !== cpassword ? ' opacity-50 cursor-not-allowed' : ''}`}
-                  disabled={formData.password !== cpassword}
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500${
+                    Boolean(formData.password && formData.password !== cpassword) ? ' opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  disabled={Boolean(formData.password && formData.password !== cpassword)}
                 >
                   {currentLocation ? 'Update' : 'Add'} Location
                 </button>
@@ -543,10 +586,8 @@ const Locations = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-90vh overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Add Franchise Admin
-              </h3>
-              <button 
+              <h3 className="text-xl font-semibold text-gray-900">Add Franchise Admin</h3>
+              <button
                 onClick={() => setShowAdminModal(false)}
                 className="text-gray-400 hover:text-gray-600"
                 aria-label="Close modal"
@@ -557,9 +598,7 @@ const Locations = () => {
             <form onSubmit={handleAdminSubmit} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
                   <input
                     type="text"
                     name="first_name"
@@ -571,9 +610,7 @@ const Locations = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
                   <input
                     type="text"
                     name="last_name"
@@ -585,11 +622,8 @@ const Locations = () => {
                   />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input
                   type="email"
                   name="email"
@@ -600,12 +634,9 @@ const Locations = () => {
                   required
                 />
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                   <input
                     type="password"
                     name="password"
@@ -617,14 +648,15 @@ const Locations = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Confirm Password
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
                   <input
                     type="password"
                     name="confirm_password"
                     value={cpassword}
-                    onChange={(e) => { setcpassword(e.target.value); if (error) setError(null); }}
+                    onChange={(e) => {
+                      setcpassword(e.target.value);
+                      if (error) setError(null);
+                    }}
                     onBlur={() => {
                       if (adminFormData.password !== cpassword) {
                         setError('Passwords do not match');
@@ -638,11 +670,8 @@ const Locations = () => {
                   />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Assign Locations
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign Locations</label>
                 <select
                   name="location_ids"
                   multiple
@@ -660,11 +689,9 @@ const Locations = () => {
                 </select>
                 <p className="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple locations</p>
               </div>
-              
               {error && (
                 <div className="text-red-600 text-sm mb-2">{error}</div>
               )}
-              
               <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -675,7 +702,9 @@ const Locations = () => {
                 </button>
                 <button
                   type="submit"
-                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''}`}
+                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${
+                    adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''
+                  }`}
                   disabled={adminFormData.password !== cpassword || loading}
                 >
                   {loading ? 'Adding...' : 'Add Franchise Admin'}

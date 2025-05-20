@@ -23,37 +23,112 @@ interface LocationData {
   }[];
 }
 
+function isApiError(err: unknown): err is { 
+  response: { 
+    status: number;
+    statusText: string;
+    data: { 
+      message: string;
+      error?: string;
+    } 
+  };
+  config?: {
+    url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+  }
+} {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'response' in err
+  ) {
+    const response = (err as { response?: unknown }).response;
+    if (
+      typeof response === 'object' &&
+      response !== null &&
+      'data' in response &&
+      'status' in response &&
+      'statusText' in response
+    ) {
+      const data = (response as { data?: unknown }).data;
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'message' in data &&
+        typeof (data as { message?: unknown }).message === 'string'
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 const MyLocation = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locationData, setLocationData] = useState<LocationData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<Partial<LocationData>>({});
-  
-  // Get user information
+  const [formData, setFormData] = useState<Partial<LocationData & { password: string; confirm_password: string }>>({});
+  const [cpassword, setCpassword] = useState('');
+
+  // Get user information and store functions
   const { user } = useAccountStore();
+  const { locations, setLocations } = useLocationStore();
+
+  const accessibleLocations = user?.is_super_admin 
+    ? locations 
+    : locations.filter(loc => user?.assigned_locations?.some(al => al.id === loc.id));
 
   useEffect(() => {
     const fetchMyLocation = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        console.log('No user ID found:', user);
+        setError('User not authenticated. Please log in.');
+        setIsLoading(false);
+        return;
+      }
       
       try {
         setIsLoading(true);
-        // Fetch the franchise location for the current user
-        const response = await api.get(`/locations/franchise/${user.id}/`);
-        setLocationData(response.data);
-        setFormData(response.data);
+        setError(null);
+        
+        // For franchise admin, use their assigned locations directly
+        if (user.is_franchise_admin && user.assigned_locations && user.assigned_locations.length > 0) {
+          const locationId = user.assigned_locations[0].id;
+          console.log('Fetching location details for ID:', locationId);
+          
+          // Updated endpoint format
+          const locationResponse = await api.get(`/locations/?id=${locationId}`);
+          console.log('Location response:', locationResponse);
+          
+          if (!locationResponse.data) {
+            throw new Error('Invalid response format from location endpoint');
+          }
+
+          setLocationData(locationResponse.data);
+          setFormData(locationResponse.data);
+        } else {
+          // For super admin or if no assigned locations
+          setError('No location assigned to your account. Please contact super admin to assign a location.');
+        }
       } catch (err) {
-        console.error('Error fetching location data:', err);
-        setError('Failed to load your location data. Please try again later.');
+        console.error('Error in fetchMyLocation:', err);
+        if (isApiError(err)) {
+          const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Failed to load location data';
+          setError(errorMessage);
+        } else {
+          setError('An unexpected error occurred. Please try again later.');
+        }
       } finally {
         setIsLoading(false);
       }
     };
     
     fetchMyLocation();
-  }, [user?.id]);
-  
+  }, [user]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData({
@@ -61,29 +136,46 @@ const MyLocation = () => {
       [name]: value
     });
   };
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!locationData?.id) return;
     
+    if (formData.password !== cpassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      // Update the location data
-      await api.put(`/locations/${locationData.id}/`, formData);
+      // Update the location data with correct endpoint
+      await api.patch(`/locations/?id=${locationData.id}`, formData);
       
-      // Refresh location data
-      const response = await api.get(`/locations/franchise/${user?.id}/`);
+      // Refresh location data with correct endpoint
+      const response = await api.get(`/locations/?id=${locationData.id}`);
       setLocationData(response.data);
+      setFormData(response.data);
       
-      // Exit edit mode
+      // Update the store to reflect changes
+      setLocations(
+        locations.map(loc =>
+          loc.id === locationData.id ? { ...loc, ...response.data } : loc
+        )
+      );
+      
       setIsEditing(false);
+      setCpassword('');
+      setError(null);
       
-      // Show success message
       alert('Location updated successfully');
     } catch (err) {
+      if (isApiError(err)) {
+        setError(err.response.data.message || err.response.data.error || 'Failed to update location');
+      } else {
+        setError('Failed to update location. Please try again.');
+      }
       console.error('Error updating location:', err);
-      setError('Failed to update location. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +199,7 @@ const MyLocation = () => {
   
   if (!locationData) {
     return (
-      <div className="bg-amber-100 border border-amber-400 text-amber-700 px-4 py-3 rounded">
+      <div className="bg-amber-100 border border-amber-400 text-amber-80-700 px-4 py-3 rounded">
         <p>No location assigned to your account. Please contact super admin to assign a location.</p>
       </div>
     );
@@ -253,17 +345,62 @@ const MyLocation = () => {
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password || ''}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              name="confirm_password"
+              value={cpassword}
+              onChange={(e) => {
+                setCpassword(e.target.value);
+                if (error) setError(null);
+              }}
+              onBlur={() => {
+                if (formData.password !== cpassword) {
+                  setError('Passwords do not match');
+                } else if (error === 'Passwords do not match') {
+                  setError(null);
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
+          </div>
+          
+          {error && (
+            <div className="col-span-1 md:col-span-2 text-red-600 text-sm mb-2">{error}</div>
+          )}
+          
           <div className="col-span-1 md:col-span-2 flex justify-end mt-4 space-x-3">
             <button
               type="button"
-              onClick={() => setIsEditing(false)}
+              onClick={() => {
+                setIsEditing(false);
+                setCpassword('');
+                setError(null);
+                setFormData(locationData);
+              }}
               className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md"
+              className={`px-4 py-2 bg-blue-600 text-white rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={isLoading}
             >
               {isLoading ? 'Saving...' : 'Save Changes'}
@@ -323,4 +460,4 @@ const MyLocation = () => {
   );
 };
 
-export default MyLocation; 
+export default MyLocation;

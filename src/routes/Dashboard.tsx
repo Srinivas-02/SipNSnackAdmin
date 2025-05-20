@@ -22,10 +22,13 @@ const Dashboard = () => {
         if (!user) return false;
         
         // Routes only super admin can access
-        const superAdminRoutes = ['/dashboard/users', '/dashboard/locations'];
+        const superAdminRoutes = ['/dashboard/locations'];
         
         // Routes only franchise admin can access
         const franchiseAdminRoutes = ['/dashboard/my-location'];
+        
+        // Routes accessible by both super admin and franchise admin
+        const adminRoutes = ['/dashboard/users'];
         
         // Check permissions based on path and role
         if (superAdminRoutes.includes(path) && !user.is_super_admin) {
@@ -33,6 +36,10 @@ const Dashboard = () => {
         }
         
         if (franchiseAdminRoutes.includes(path) && !user.is_franchise_admin) {
+            return false;
+        }
+        
+        if (adminRoutes.includes(path) && !user.is_super_admin && !user.is_franchise_admin) {
             return false;
         }
         

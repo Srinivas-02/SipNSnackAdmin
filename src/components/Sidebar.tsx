@@ -22,7 +22,7 @@ type SidebarProps = {
 type MenuItem = {
   name: string;
   path: string;
-  icon: JSX.Element;
+  icon: React.ReactElement;
   roles: string[]; // Which roles can see this item: 'super', 'franchise', 'staff'
 }
 
@@ -76,7 +76,7 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Staff', 
       path: '/dashboard/users', 
       icon: <FaUsers size={20} />,
-      roles: ['super'] // Only super admin can manage users
+      roles: ['super', 'franchise'] // Allow both super admin and franchise admin to see staff
     },
     { 
       name: 'Analytics', 

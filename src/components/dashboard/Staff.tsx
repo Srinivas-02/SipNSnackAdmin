@@ -3,6 +3,8 @@ import { FaEdit, FaTrash, FaUserPlus, FaCheck, FaTimes, FaFilter } from 'react-i
 import api from '../../common/api';
 import { User } from '../../store/account';
 import useLocationStore from '../../store/location';
+import useAccountStore from '../../store/account';
+import useStaffStore from '../../store/staff';
 
 interface UserWithLocation extends User {
   locations?: { id: number; name: string }[];
@@ -15,8 +17,10 @@ const Staff = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithLocation | null>(null);
-  const [filterLocation, setFilterLocation] = useState<number | null>(null);
+  const [filterLocation, setFilterLocation] = useState<string>('all');
   const { locations, fetchLocations } = useLocationStore();
+  const { user } = useAccountStore();
+  const { staffByLocation, fetchStaffByLocation, deleteStaffMember } = useStaffStore();
   
   const [formData, setFormData] = useState({
     email: '',
@@ -32,13 +36,28 @@ const Staff = () => {
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        
-        // Fetch locations if they're not already loaded
-        if (locations.length === 0) {
-          await fetchLocations();
+        await fetchLocations();
+
+        if (user?.is_franchise_admin) {
+          // If assigned_locations is not available, fetch franchise admin data
+          if (!user.assigned_locations || user.assigned_locations.length === 0) {
+            console.log('Fetching franchise admin data...');
+            const franchiseResponse = await api.get(`/accounts/franchise-admin/?id=${user.id}`);
+            if (franchiseResponse.data && franchiseResponse.data.locations) {
+              // Update user's assigned locations
+              user.assigned_locations = franchiseResponse.data.locations;
+            }
+          }
+
+          // Fetch staff data
+          const response = await api.get('/accounts/staff/');
+          setUsers(response.data);
+          setFilterLocation('all');
+        } else if (user?.is_super_admin) {
+          const response = await api.get('/accounts/staff/');
+          setUsers(response.data);
+          setFilterLocation('all');
         }
-        
-        await fetchStaff();
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load data. Please try again.');
@@ -48,36 +67,24 @@ const Staff = () => {
     };
 
     fetchData();
-  }, []);
+  }, [user, fetchLocations]);
   
-  // Fetch staff with location filter
-  const fetchStaff = async () => {
-    try {
-      const endpoint = filterLocation 
-        ? `/accounts/staff/?location_id=${filterLocation}` 
-        : '/accounts/staff/';
-      
-      const response = await api.get(endpoint);
-      setUsers(response.data);
-    } catch (err) {
-      console.error('Error fetching staff:', err);
-      setError('Failed to load staff members. Please try again.');
-      throw err;
-    }
-  };
-
-  // Apply location filter
-  const handleFilterChange = async (locationId: number | null) => {
+  // Handle location filter change
+  const handleFilterChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const locationId = e.target.value;
     setFilterLocation(locationId);
     setIsLoading(true);
     
     try {
-      const endpoint = locationId 
-        ? `/accounts/staff/?location_id=${locationId}` 
-        : '/accounts/staff/';
-      
-      const response = await api.get(endpoint);
-      setUsers(response.data);
+      if (locationId === 'all') {
+        // For "All locations", fetch all staff (backend will filter based on permissions)
+        const response = await api.get('/accounts/staff/');
+        setUsers(response.data);
+      } else {
+        // For specific location, fetch staff for that location
+        const response = await api.get(`/accounts/staff/?location_id=${locationId}`);
+        setUsers(response.data);
+      }
     } catch (err) {
       console.error('Error filtering staff:', err);
       setError('Failed to filter staff members. Please try again.');
@@ -133,7 +140,7 @@ const Staff = () => {
       await api.post('/accounts/staff/', formData);
       
       // Refresh user list
-      await fetchStaff();
+      await fetchStaffByLocation();
       
       // Reset form and close modal
       setFormData({
@@ -176,7 +183,7 @@ const Staff = () => {
       }
       
       // Refresh user list
-      await fetchStaff();
+      await fetchStaffByLocation();
       
       // Close modal
       setShowEditModal(false);
@@ -196,10 +203,8 @@ const Staff = () => {
     
     try {
       setIsLoading(true);
-      await api.delete(`/accounts/staff/?id=${userId}`);
-      
-      // Refresh user list
-      await fetchStaff();
+      await deleteStaffMember(userId);
+      setUsers(users.filter(user => user.id !== userId));
       setError(null);
     } catch (err) {
       console.error('Error deleting staff member:', err);
@@ -223,6 +228,28 @@ const Staff = () => {
     setError(null);
   };
 
+  // Get available locations for the dropdown
+  const getAvailableLocations = () => {
+    // Debug logs
+    console.log('Current user:', user);
+    console.log('User type:', user?.is_super_admin ? 'Super Admin' : user?.is_franchise_admin ? 'Franchise Admin' : 'Unknown');
+    console.log('Assigned locations:', user?.assigned_locations);
+
+    if (user?.is_super_admin) {
+      return locations || [];
+    }
+    if (user?.is_franchise_admin) {
+      // For franchise admin, return their assigned locations from the user object
+      if (!user.assigned_locations || user.assigned_locations.length === 0) {
+        console.log('No assigned locations found for franchise admin');
+        return [];
+      }
+      console.log('Returning franchise admin locations:', user.assigned_locations);
+      return user.assigned_locations;
+    }
+    return [];
+  };
+
   if (isLoading && users.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -237,24 +264,26 @@ const Staff = () => {
         <h2 className="text-xl font-semibold text-gray-800">
           Staff Management
         </h2>
-        <button
-          onClick={() => {
-            setFormData({
-              email: '',
-              first_name: '',
-              last_name: '',
-              password: '',
-              is_staff_member: true,
-              location_ids: []
-            });
-            setShowAddModal(true);
-            setError(null);
-          }}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2"
-        >
-          <FaUserPlus />
-          Add Staff Member
-        </button>
+        {user?.is_super_admin && (
+          <button
+            onClick={() => {
+              setFormData({
+                email: '',
+                first_name: '',
+                last_name: '',
+                password: '',
+                is_staff_member: true,
+                location_ids: []
+              });
+              setShowAddModal(true);
+              setError(null);
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2"
+          >
+            <FaUserPlus />
+            Add Staff Member
+          </button>
+        )}
       </div>
 
       {error && (
@@ -270,12 +299,12 @@ const Staff = () => {
         </div>
         <select
           className="border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={filterLocation || ''}
-          onChange={(e) => handleFilterChange(e.target.value ? Number(e.target.value) : null)}
+          value={filterLocation}
+          onChange={handleFilterChange}
         >
-          <option value="">All locations</option>
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
+          <option value="all">All locations</option>
+          {getAvailableLocations().map((location) => (
+            <option key={location.id} value={String(location.id)}>
               {location.name}
             </option>
           ))}
@@ -302,19 +331,19 @@ const Staff = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {users.length > 0 ? (
-              users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
+              users.map((staff) => (
+                <tr key={staff.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">
-                      {user.first_name} {user.last_name}
+                      {staff.first_name} {staff.last_name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-500">{user.email}</div>
+                    <div className="text-sm text-gray-500">{staff.email}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
-                      {user.locations?.map(location => (
+                      {staff.locations?.map(location => (
                         <span key={location.id} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
                           {location.name}
                         </span>
@@ -323,13 +352,13 @@ const Staff = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
-                      onClick={() => openEditModal(user)}
+                      onClick={() => openEditModal(staff)}
                       className="text-blue-600 hover:text-blue-900 mr-4"
                     >
                       <FaEdit size={18} />
                     </button>
                     <button 
-                      onClick={() => handleDeleteUser(user.id)}
+                      onClick={() => handleDeleteUser(staff.id)}
                       className="text-red-600 hover:text-red-900"
                     >
                       <FaTrash size={18} />

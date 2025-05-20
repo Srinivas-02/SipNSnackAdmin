@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaImage, FaFolderPlus } from 'react-icons/fa';
 import useLocationStore from '../../store/location';
 import useMenuStore from '../../store/menu';
-import api from '../../common/api'
-const MenuItems = () => {
-  // Get locations from store
-  const locations = useLocationStore((state) => state.locations);
-  // Get categoriesByLocation from store
-  const categoriesByLocation = useMenuStore((state) => state.categoriesByLocation);
+import useAccountStore from '../../store/account';
+import api from '../../common/api';
 
-  // Flatten all menu items from all categories in all locations
+const MenuItems = () => {
+  const { user } = useAccountStore();
+  const locations = useLocationStore((state) => state.locations) || [];
+  const categoriesByLocation = useMenuStore((state) => state.categoriesByLocation);
+  const [error, setError] = useState<string | null>(null);
+
+  // Flatten all menu items
   const menuItems = Object.values(categoriesByLocation)
     .flat()
     .flatMap((cat) => cat.menu_items.map((item) => ({
@@ -18,7 +20,6 @@ const MenuItems = () => {
       location_id: cat.location_id,
     })));
 
-  // Gather all categories for the selected location
   const getCategoriesForLocation = (locationId: string | number | undefined) => {
     if (!locationId || locationId === 'all') return [];
     return categoriesByLocation[Number(locationId)] || [];
@@ -36,6 +37,7 @@ const MenuItems = () => {
     location_id: number;
     image?: string | null;
     description?: string;
+    category_id?: number;
   } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState<{
@@ -56,23 +58,21 @@ const MenuItems = () => {
   const [categoryForm, setCategoryForm] = useState<{
     name: string;
     location_id?: number;
-    // display_order: number;
   }>({
     name: '',
     location_id: undefined,
-    // display_order: 2,
   });
 
-  // Handle location change: reset category if location changes
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedLocation(e.target.value);
     setSelectedCategory('all');
     setFormData((prev) => ({ ...prev, location_id: e.target.value !== 'all' ? Number(e.target.value) : undefined, category_id: undefined }));
+    setError(null);
   };
 
-  // Handle category change
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedCategory(e.target.value);
+    setError(null);
   };
 
   const handleAddMenuItem = () => {
@@ -85,6 +85,7 @@ const MenuItems = () => {
       location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
       description: '',
     });
+    setError(null);
     setShowModal(true);
   };
 
@@ -98,7 +99,6 @@ const MenuItems = () => {
     description?: string;
     category_id?: number;
   }) => {
-    // Find category_id if not present
     let categoryId = item.category_id;
     if (!categoryId) {
       const cats = getCategoriesForLocation(item.location_id);
@@ -114,17 +114,31 @@ const MenuItems = () => {
       location_id: item.location_id,
       description: item.description ?? '',
     });
+    setError(null);
     setShowModal(true);
   };
 
-  // Linter: id is defined but never used (API integration needed)
-  const handleDeleteMenuItem = (id: number) => {
+  const handleDeleteMenuItem = async (id: number, locationId: number, categoryName: string) => {
+    if (!user?.is_super_admin) {
+      setError('Only super admins can delete menu items');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this menu item?')) {
-      // In a real app, would call API to delete
+      try {
+        const result = await useMenuStore.getState().deleteMenuItem(id, locationId, categoryName);
+        if (result.success) {
+          setError(null);
+          alert('Menu item deleted successfully');
+        } else {
+          setError(result.error || 'Failed to delete menu item');
+        }
+      } catch (err: any) {
+        console.error('Error in handleDeleteMenuItem:', err);
+        setError(err.response?.data?.message || err.message || 'An error occurred');
+      }
     }
   };
 
-  // Linter: Unexpected any. Specify a different type.
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     let updatedValue: string | number | undefined = value;
@@ -135,57 +149,60 @@ const MenuItems = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    if (!formData.name || !formData.price || !formData.category_id || !formData.location_id) {
+      setError('Please fill in all required fields');
+      return;
+    }
     try {
-      console.log(formData)
-      const response = await api.post('/menu/menu-items/', {
-        ...formData
-      });
-      if (response.status === 201) {
-        // Find the category name using category_id and location_id
-        let categoryName = '';
-        if (formData.location_id && formData.category_id) {
-          const cats = getCategoriesForLocation(formData.location_id);
-          const found = cats.find((cat) => cat.id === formData.category_id);
-          if (found) categoryName = found.name;
+      if (currentItem) {
+        const updateData = {
+          id: currentItem.id,
+          name: formData.name,
+          price: Number(formData.price),
+          category_id: formData.category_id,
+          location_id: formData.location_id,
+          image: formData.image || '',
+          description: formData.description || ''
+        };
+        const result = await useMenuStore.getState().updateMenuItem(currentItem.id, updateData);
+        if (result.success) {
+          alert('Menu item updated successfully');
+          setShowModal(false);
+          setFormData({
+            name: '',
+            price: 0,
+            category_id: undefined,
+            image: '',
+            location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
+            description: '',
+          });
+        } else {
+          setError(result.error || 'Failed to update menu item');
         }
-        // Construct the full menu item object
-        if (formData.location_id !== undefined) {
-          const newMenuItem = {
-            id: response.data.id,
-            name: response.data.name,
-            price: formData.price,
-            category: categoryName,
-            location_id: Number(formData.location_id),
-            image: formData.image ?? '',
-            description: formData.description ?? '',
-          };
-          useMenuStore.getState().addMenuItem(newMenuItem);
+      } else {
+        const result = await useMenuStore.getState().addMenuItem(formData);
+        if (result.success) {
+          alert('Menu item added successfully');
+          setShowModal(false);
+          setFormData({
+            name: '',
+            price: 0,
+            category_id: undefined,
+            image: '',
+            location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
+            description: '',
+          });
+        } else {
+          setError(result.error || 'Failed to add menu item');
         }
-        setShowModal(false);
-        // Optionally reset form
-        setFormData({
-          name: '',
-          price: 0,
-          category_id: undefined,
-          image: '',
-          location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
-          description: '',
-        });
-        alert('Menu item added successfully');
       }
     } catch (err: any) {
-      let errorMessage = 'Error adding menu item';
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      alert(errorMessage);
-      console.error('Error adding menu item:', err);
+      console.error('Error in handleSubmit:', err);
+      setError(err.response?.data?.message || err.message || 'An error occurred');
     }
   };
 
-  // Category modal handlers
   const handleCategoryFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let updatedValue: string | number | undefined = value;
@@ -195,57 +212,49 @@ const MenuItems = () => {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!categoryForm.name || !categoryForm.location_id) {
-      alert('Please fill in all required fields');
+      setError('Please fill in all required fields');
       return;
     }
-
     try {
       const response = await api.post('/menu/categories/', {
         name: categoryForm.name,
         location_id: categoryForm.location_id
       });
-
       if (response.status === 201) {
-        // Update categories in store
-        const newCategory = response.data;
-        useMenuStore.getState().addCategory(newCategory);
-
-        // Reset form and close modal
-        setCategoryForm({
-          name: '',
-          location_id: undefined
-        });
+        useMenuStore.getState().addCategory(response.data);
+        setCategoryForm({ name: '', location_id: undefined });
         setShowCategoryModal(false);
-        
+        setError(null);
         alert('Category created successfully');
       }
     } catch (err: any) {
-      let errorMessage = 'Error creating category';
-      
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      alert(errorMessage);
+      setError(err.response?.data?.message || err.message || 'Error creating category');
       console.error('Error creating category:', err);
     }
   };
 
-  // Filter menu items by location and category
   const filteredMenuItems = menuItems.filter(
     (item) =>
       (selectedLocation === 'all' || String(item.location_id) === selectedLocation) &&
       (selectedCategory === 'all' || item.category === selectedCategory) &&
-      (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()))
+      ((item.name || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        ((item.category || '').toLowerCase().includes((searchTerm || '').toLowerCase())))
   );
 
-  // Get categories for filter dropdown
   const categoryOptions = getCategoriesForLocation(selectedLocation);
+
+  // Check if user can edit a menu item
+  const canEditMenuItem = (item: { location_id: number }) => {
+    if (user?.is_super_admin) return true;
+    if (user?.is_franchise_admin) {
+      return locations.some(loc => loc.id === item.location_id);
+    }
+    return false;
+  };
+
+  // Check if user can add menu items or categories
+  const canAddItems = user?.is_super_admin || user?.is_franchise_admin;
 
   return (
     <div className="space-y-6">
@@ -261,7 +270,6 @@ const MenuItems = () => {
               <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
             ))}
           </select>
-
           <select
             value={selectedCategory}
             onChange={handleCategoryChange}
@@ -273,7 +281,6 @@ const MenuItems = () => {
               <option key={cat.id} value={cat.name}>{cat.name}</option>
             ))}
           </select>
-
           <input
             type="text"
             placeholder="Search menu items..."
@@ -282,23 +289,37 @@ const MenuItems = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowCategoryModal(true)}
-            className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
-          >
-            <FaFolderPlus size={14} />
-            <span>Add Category</span>
-          </button>
-          <button
-            onClick={handleAddMenuItem}
-            className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
-          >
-            <FaPlus size={14} />
-            <span>Add Menu Item</span>
-          </button>
+        <div className="flex flex-col gap-2">
+          {canAddItems ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCategoryModal(true)}
+                className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors"
+              >
+                <FaFolderPlus size={14} />
+                <span>Add Category</span>
+              </button>
+              <button
+                onClick={handleAddMenuItem}
+                className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+              >
+                <FaPlus size={14} />
+                <span>Add Menu Item</span>
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">
+              Only super admins and franchise admins can add menu items or categories.
+            </p>
+          )}
         </div>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredMenuItems.length > 0 ? (
@@ -328,18 +349,36 @@ const MenuItems = () => {
                 <div className="flex justify-between items-center mt-4">
                   <span className="px-2 py-1 bg-gray-100 text-xs rounded">{item.category}</span>
                   <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleEditMenuItem(item)}
-                      className="text-blue-500 hover:text-blue-700"
-                    >
-                      <FaEdit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteMenuItem(item.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <FaTrash size={18} />
-                    </button>
+                    {canEditMenuItem(item) ? (
+                      <button 
+                        onClick={() => handleEditMenuItem(item)}
+                        className="text-blue-500 hover:text-blue-700"
+                      >
+                        <FaEdit size={18} />
+                      </button>
+                    ) : (
+                      <span
+                        className="text-gray-400 cursor-not-allowed"
+                        title="Only super admins or assigned franchise admins can edit this menu item"
+                      >
+                        <FaEdit size={18} />
+                      </span>
+                    )}
+                    {user?.is_super_admin ? (
+                      <button 
+                        onClick={() => handleDeleteMenuItem(item.id, item.location_id, item.category)}
+                        className="text-red-500 hover:text-red-700"
+                      >
+                        <FaTrash size={18} />
+                      </button>
+                    ) : (
+                      <span
+                        className="text-gray-400 cursor-not-allowed"
+                        title="Only super admins can delete menu items"
+                      >
+                        <FaTrash size={18} />
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -352,7 +391,6 @@ const MenuItems = () => {
         )}
       </div>
 
-      {/* Add/Edit Menu Item Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -392,7 +430,6 @@ const MenuItems = () => {
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     rows={3}
-                    required
                   />
                 </div>
                 <div>
@@ -416,7 +453,7 @@ const MenuItems = () => {
                   </label>
                   <select
                     name="category_id"
-                    value={formData.category_id !== undefined && formData.category_id !== null ? String(formData.category_id) : ''}
+                    value={formData.category_id !== undefined ? String(formData.category_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
@@ -447,7 +484,7 @@ const MenuItems = () => {
                   </label>
                   <select
                     name="location_id"
-                    value={formData.location_id !== undefined && formData.location_id !== null ? String(formData.location_id) : ''}
+                    value={formData.location_id !== undefined ? String(formData.location_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
@@ -459,6 +496,9 @@ const MenuItems = () => {
                   </select>
                 </div>
               </div>
+              {error && (
+                <div className="mt-4 text-red-600 text-sm">{error}</div>
+              )}
               <div className="mt-8 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -479,7 +519,6 @@ const MenuItems = () => {
         </div>
       )}
 
-      {/* Add Category Modal */}
       {showCategoryModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -513,7 +552,7 @@ const MenuItems = () => {
                   </label>
                   <select
                     name="location_id"
-                    value={categoryForm.location_id !== undefined && categoryForm.location_id !== null ? String(categoryForm.location_id) : ''}
+                    value={categoryForm.location_id !== undefined ? String(categoryForm.location_id) : ''}
                     onChange={handleCategoryFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
@@ -524,22 +563,10 @@ const MenuItems = () => {
                     ))}
                   </select>
                 </div>
-                {/*
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Display Order
-                  </label>
-                  <input
-                    type="number"
-                    name="display_order"
-                    value={categoryForm.display_order}
-                    onChange={handleCategoryFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    min="1"
-                  />
-                </div>
-                */}
               </div>
+              {error && (
+                <div className="mt-4 text-red-600 text-sm">{error}</div>
+              )}
               <div className="mt-8 flex justify-end space-x-3">
                 <button
                   type="button"
@@ -563,4 +590,4 @@ const MenuItems = () => {
   );
 };
 
-export default MenuItems; 
+export default MenuItems;
