@@ -1,8 +1,10 @@
-import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding, FaUserShield } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaTimes, FaPhone, FaMapMarkerAlt, FaBuilding, FaUserShield, FaEdit } from 'react-icons/fa';
 import useLocationStore,{Location} from '../../store/location'
 import useAccountStore from '../../store/account'
 import { useState, useEffect } from 'react';
 import api from '../../common/api'
+import Select from 'react-select';
+import toast from 'react-hot-toast';
 
 function isApiError(err: unknown): err is { response: { data: { message: string } } } {
   if (
@@ -42,14 +44,7 @@ const Locations = () => {
   const setLocations = useLocationStore((state) => state.setLocations);
   const [showModal, setShowModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<null | {
-    id: number;
-    name: string;
-    city: string;
-    state: string;
-    address: string;
-    phone: number;
-  }>(null);
+  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState<{
@@ -57,8 +52,8 @@ const Locations = () => {
     city: string;
     state: string;
     address: string;
-    phone: null | number;
-    password : string;
+    phone: string | number | null;
+    password: string;
   }>({
     name: '',
     city: '',
@@ -81,6 +76,26 @@ const Locations = () => {
     last_name: '',
     location_ids: [],
   });
+
+  // Add this new type for the select options
+  type LocationOption = {
+    value: number;
+    label: string;
+  };
+
+  // Convert locations to select options
+  const locationOptions: LocationOption[] = locations.map(location => ({
+    value: location.id,
+    label: `${location.name} (${location.city}, ${location.state})`
+  }));
+
+  // Add this function to handle react-select changes
+  const handleLocationSelectChange = (selectedOptions: readonly LocationOption[] | null) => {
+    setAdminFormData(prev => ({
+      ...prev,
+      location_ids: selectedOptions ? selectedOptions.map(option => option.value) : []
+    }));
+  };
 
   useEffect(() => {
     // Fetch franchise admins when component mounts
@@ -124,30 +139,36 @@ const Locations = () => {
     setShowAdminModal(true);
   };
 
-  // const handleEditLocation = (location: {
-  //   id: number;
-  //   name: string;
-  //   city: string;
-  //   state: string;
-  //   address: string;
-  //   phone: number;
-  // }) => {
-  //   setCurrentLocation(location);
-  //   setFormData({
-  //     name: location.name,
-  //     city: location.city,
-  //     state: location.state,
-  //     address: location.address,
-  //     phone: location.phone,
-  //   });
-  //   setShowModal(true);
-  // };
+  const handleEditLocation = (location: Location) => {
+    setCurrentLocation(location);
+    setFormData({
+      name: location.name,
+      city: location.city,
+      state: location.state,
+      address: location.address,
+      phone: location.phone as number, // Cast to number since we know it's a number in the form
+      password: '', // Password is not pre-filled for security reasons
+    });
+    setShowModal(true);
+  };
 
-  const handleDeleteLocation = (id: number) => {
+  const handleDeleteLocation = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
-      setLocations(locations.filter(location => location.id !== id) );
+      try {
+        await api.delete(`/locations/?id=${id}`);
+        setLocations(locations.filter(location => location.id !== id));
+        toast.success('Location deleted successfully');
+      } catch (err: unknown) {
+        console.error('Failed to delete location', err);
+        if (isApiError(err)) {
+          toast.error(`Error: ${err.response.data.message}`);
+        } else {
+          toast.error('Failed to delete location. Please try again later.');
+        }
+      }
     }
   };
+  
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -160,29 +181,12 @@ const Locations = () => {
     }
   };
 
-  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    
-    if (name === 'location_ids' && e.target instanceof HTMLSelectElement) {
-      const options = e.target.options;
-      const selectedValues: number[] = [];
-      
-      for (let i = 0; i < options.length; i++) {
-        if (options[i].selected) {
-          selectedValues.push(Number(options[i].value));
-        }
-      }
-      
-      setAdminFormData(prev => ({
-        ...prev,
-        location_ids: selectedValues
-      }));
-    } else {
-      setAdminFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
+    setAdminFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -192,21 +196,51 @@ const Locations = () => {
       setError('Passwords do not match');
       return;
     }
+
+    // Ensure phone is not null before submitting
+    if (formData.phone === null) {
+      setError('Phone number is required');
+      return;
+    }
+
     try {
-      const response = await api.post('/locations/', {
-        ...formData
-      });
-      if (response && response.data) {
-        setLocations([...locations, {id: response.data.id, ...formData} as Location]);
-        setShowModal(false);
-        setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
-        setcpassword('');
+      const submitData = {
+        ...formData,
+        phone: formData.phone, // This will be either string or number, but not null
+      };
+
+      if (currentLocation) {
+        // Update existing location
+        const response = await api.patch('/locations/', {
+          ...submitData,
+          id: currentLocation.id // Include id in the request body instead of URL
+        });
+        if (response && response.data) {
+          setLocations(locations.map(loc => 
+            loc.id === currentLocation.id 
+              ? { ...loc, ...submitData }
+              : loc
+          ));
+          setShowModal(false);
+          setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
+          setcpassword('');
+          setCurrentLocation(null);
+        }
+      } else {
+        // Create new location
+        const response = await api.post('/locations/', submitData);
+        if (response && response.data) {
+          setLocations([...locations, { id: response.data.id, ...submitData }] as Location[]);
+          setShowModal(false);
+          setFormData({ name: '', city: '', state: '', address: '', phone: null, password: '' });
+          setcpassword('');
+        }
       }
     } catch (err: unknown) {
       if (isApiError(err)) {
         setError(err.response.data.message);
       } else {
-        setError('Failed to add location');
+        setError(currentLocation ? 'Failed to update location' : 'Failed to add location');
       }
       console.log(err);
     }
@@ -346,13 +380,13 @@ const Locations = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex space-x-3">
-                        {/* <button 
+                        <button 
                           onClick={() => handleEditLocation(location)}
                           className="text-blue-600 hover:text-blue-800"
                           aria-label="Edit location"
                         >
                           <FaEdit size={18} />
-                        </button> */}
+                        </button>
                         <button 
                           onClick={() => handleDeleteLocation(location.id)}
                           className="text-red-600 hover:text-red-800"
@@ -643,22 +677,48 @@ const Locations = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assign Locations
                 </label>
-                <select
+                <Select
+                  isMulti
                   name="location_ids"
-                  multiple
-                  value={adminFormData.location_ids.map(id => id.toString())}
-                  onChange={handleAdminFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  required
-                  size={Math.min(5, locations.length)}
-                >
-                  {locations.map(location => (
-                    <option key={location.id} value={location.id}>
-                      {location.name} ({location.city}, {location.state})
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple locations</p>
+                  options={locationOptions}
+                  className="basic-multi-select"
+                  classNamePrefix="select"
+                  value={locationOptions.filter(option => 
+                    adminFormData.location_ids.includes(option.value)
+                  )}
+                  onChange={handleLocationSelectChange}
+                  placeholder="Select locations..."
+                  isSearchable={true}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: '42px',
+                      borderColor: '#D1D5DB',
+                      '&:hover': {
+                        borderColor: '#9CA3AF'
+                      }
+                    }),
+                    multiValue: (base) => ({
+                      ...base,
+                      backgroundColor: '#EFF6FF',
+                      borderRadius: '0.375rem'
+                    }),
+                    multiValueLabel: (base) => ({
+                      ...base,
+                      color: '#1D4ED8',
+                      padding: '2px 6px'
+                    }),
+                    multiValueRemove: (base) => ({
+                      ...base,
+                      color: '#1D4ED8',
+                      ':hover': {
+                        backgroundColor: '#DBEAFE',
+                        color: '#1E40AF'
+                      }
+                    })
+                  }}
+                />
+                <p className="mt-1 text-sm text-gray-500">Search and select multiple locations</p>
               </div>
               
               {error && (
@@ -675,7 +735,7 @@ const Locations = () => {
                 </button>
                 <button
                   type="submit"
-                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''}`}
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''}`}
                   disabled={adminFormData.password !== cpassword || loading}
                 >
                   {loading ? 'Adding...' : 'Add Franchise Admin'}

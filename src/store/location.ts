@@ -2,13 +2,14 @@ import {create} from 'zustand'
 import {persist, createJSONStorage} from 'zustand/middleware'
 import api from '../common/api'
 
-export interface Location {
+export type Location = {
     id: number,
     name: string,
     city: string,
     state: string,
     address: string,
-    phone: string | number
+    phone: string | number,
+    password?: string
 }
 
 interface LocationBasic {

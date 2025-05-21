@@ -3,6 +3,8 @@ import { FaEdit, FaTrash, FaUserPlus, FaCheck, FaTimes, FaFilter } from 'react-i
 import api from '../../common/api';
 import { User } from '../../store/account';
 import useLocationStore from '../../store/location';
+import Select from 'react-select';
+import toast from 'react-hot-toast';
 
 interface UserWithLocation extends User {
   locations?: { id: number; name: string }[];
@@ -26,6 +28,12 @@ const Staff = () => {
     is_staff_member: true,
     location_ids: [] as number[]
   });
+
+  // Add this type for the select options
+  type LocationOption = {
+    value: number;
+    label: string;
+  };
 
   // Fetch all users and locations
   useEffect(() => {
@@ -87,27 +95,12 @@ const Staff = () => {
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const { name, value, type } = e.target as HTMLInputElement;
+    const { name, value, type } = e.target;
     
-    // Handle multi-select for locations
-    if (name === 'location_ids' && e.target instanceof HTMLSelectElement) {
-      const options = e.target.options;
-      const selectedValues: number[] = [];
-      
-      for (let i = 0; i < options.length; i++) {
-        if (options[i].selected) {
-          selectedValues.push(Number(options[i].value));
-        }
-      }
-      
-      setFormData({
-        ...formData,
-        location_ids: selectedValues
-      });
-    } else if (type === 'checkbox') {
-      const { checked } = e.target as HTMLInputElement;
+    if (type === 'checkbox') {
+      const { checked } = e.target;
       setFormData({
         ...formData,
         [name]: checked
@@ -120,11 +113,25 @@ const Staff = () => {
     }
   };
 
+  // Add this function to handle react-select changes
+  const handleLocationSelectChange = (selectedOptions: readonly LocationOption[] | null) => {
+    setFormData(prev => ({
+      ...prev,
+      location_ids: selectedOptions ? selectedOptions.map(option => option.value) : []
+    }));
+  };
+
+  // Convert locations to select options
+  const locationOptions: LocationOption[] = locations.map(location => ({
+    value: location.id,
+    label: `${location.name} (${location.city}, ${location.state})`
+  }));
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (formData.location_ids.length === 0) {
-      setError('Please select at least one location');
+      toast.error('Please select at least one location');
       return;
     }
     
@@ -146,9 +153,10 @@ const Staff = () => {
       });
       setShowAddModal(false);
       setError(null);
+      toast.success('Staff member added successfully');
     } catch (err) {
       console.error('Error adding staff member:', err);
-      setError('Failed to add staff member. Please try again.');
+      toast.error('Failed to add staff member. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +168,7 @@ const Staff = () => {
     if (!selectedUser?.id) return;
     
     if (formData.location_ids.length === 0) {
-      setError('Please select at least one location');
+      toast.error('Please select at least one location');
       return;
     }
     
@@ -169,7 +177,7 @@ const Staff = () => {
       
       // Create a copy without the password if it's empty
       if (!formData.password) {
-        const { password: _, ...rest } = formData;
+        const { password: _unused, ...rest } = formData; // eslint-disable-line @typescript-eslint/no-unused-vars
         await api.patch(`/accounts/staff/`, { id: selectedUser.id, ...rest });
       } else {
         await api.patch(`/accounts/staff/`, { id: selectedUser.id, ...formData });
@@ -181,9 +189,10 @@ const Staff = () => {
       // Close modal
       setShowEditModal(false);
       setError(null);
+      toast.success('Staff member updated successfully');
     } catch (err) {
       console.error('Error updating staff member:', err);
-      setError('Failed to update staff member. Please try again.');
+      toast.error('Failed to update staff member. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -201,9 +210,10 @@ const Staff = () => {
       // Refresh user list
       await fetchStaff();
       setError(null);
+      toast.success('Staff member deleted successfully');
     } catch (err) {
       console.error('Error deleting staff member:', err);
-      setError('Failed to delete staff member. Please try again.');
+      toast.error('Failed to delete staff member. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -268,18 +278,31 @@ const Staff = () => {
           <FaFilter className="text-gray-500 mr-2" />
           <span className="text-sm text-gray-600">Filter by location:</span>
         </div>
-        <select
-          className="border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          value={filterLocation || ''}
-          onChange={(e) => handleFilterChange(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">All locations</option>
-          {locations.map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.name}
-            </option>
-          ))}
-        </select>
+        <Select
+          className="w-64"
+          classNamePrefix="select"
+          options={[
+            { value: null, label: 'All locations' },
+            ...locationOptions
+          ]}
+          value={locationOptions.find(opt => opt.value === filterLocation) || { value: null, label: 'All locations' }}
+          onChange={(option) => handleFilterChange(option?.value === null ? null : option?.value || null)}
+          styles={{
+            control: (base) => ({
+              ...base,
+              minHeight: '38px',
+              borderColor: '#D1D5DB',
+              '&:hover': {
+                borderColor: '#9CA3AF'
+              }
+            }),
+            option: (base, state) => ({
+              ...base,
+              backgroundColor: state.isSelected ? '#2563EB' : state.isFocused ? '#DBEAFE' : 'white',
+              color: state.isSelected ? 'white' : '#374151'
+            })
+          }}
+        />
       </div>
 
       <div className="overflow-x-auto">
@@ -415,23 +438,49 @@ const Staff = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Locations <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <Select
+                    isMulti
                     name="location_ids"
-                    multiple
-                    value={formData.location_ids.map(String)}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                    size={4}
-                  >
-                    {locations.map(location => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={locationOptions}
+                    value={locationOptions.filter(option => 
+                      formData.location_ids.includes(option.value)
+                    )}
+                    onChange={handleLocationSelectChange}
+                    className="basic-multi-select"
+                    classNamePrefix="select"
+                    placeholder="Select locations..."
+                    isSearchable={true}
+                    styles={{
+                      control: (base) => ({
+                        ...base,
+                        minHeight: '42px',
+                        borderColor: '#D1D5DB',
+                        '&:hover': {
+                          borderColor: '#9CA3AF'
+                        }
+                      }),
+                      multiValue: (base) => ({
+                        ...base,
+                        backgroundColor: '#EFF6FF',
+                        borderRadius: '0.375rem'
+                      }),
+                      multiValueLabel: (base) => ({
+                        ...base,
+                        color: '#1D4ED8',
+                        padding: '2px 6px'
+                      }),
+                      multiValueRemove: (base) => ({
+                        ...base,
+                        color: '#1D4ED8',
+                        ':hover': {
+                          backgroundColor: '#DBEAFE',
+                          color: '#1E40AF'
+                        }
+                      })
+                    }}
+                  />
                   <p className="text-xs text-gray-500 mt-1">
-                    Hold Ctrl/Cmd to select multiple locations
+                    Search and select multiple locations
                   </p>
                 </div>
                 
@@ -525,23 +574,49 @@ const Staff = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Locations <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <Select
+                    isMulti
                     name="location_ids"
-                    multiple
-                    value={formData.location_ids.map(String)}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                    size={4}
-                  >
-                    {locations.map(location => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={locationOptions}
+                    value={locationOptions.filter(option => 
+                      formData.location_ids.includes(option.value)
+                    )}
+                    onChange={handleLocationSelectChange}
+                    className="basic-multi-select"
+                    classNamePrefix="select"
+                    placeholder="Select locations..."
+                    isSearchable={true}
+                    styles={{
+                      control: (base) => ({
+                        ...base,
+                        minHeight: '42px',
+                        borderColor: '#D1D5DB',
+                        '&:hover': {
+                          borderColor: '#9CA3AF'
+                        }
+                      }),
+                      multiValue: (base) => ({
+                        ...base,
+                        backgroundColor: '#EFF6FF',
+                        borderRadius: '0.375rem'
+                      }),
+                      multiValueLabel: (base) => ({
+                        ...base,
+                        color: '#1D4ED8',
+                        padding: '2px 6px'
+                      }),
+                      multiValueRemove: (base) => ({
+                        ...base,
+                        color: '#1D4ED8',
+                        ':hover': {
+                          backgroundColor: '#DBEAFE',
+                          color: '#1E40AF'
+                        }
+                      })
+                    }}
+                  />
                   <p className="text-xs text-gray-500 mt-1">
-                    Hold Ctrl/Cmd to select multiple locations
+                    Search and select multiple locations
                   </p>
                 </div>
                 
