@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FaPlus, FaEdit, FaTrash, FaTimes, FaImage, FaFolderPlus } from 'react-icons/fa';
 import useLocationStore from '../../store/location';
 import useMenuStore from '../../store/menu';
@@ -62,6 +62,7 @@ const MenuItems = () => {
     name: '',
     location_id: undefined,
   });
+  const [showDeleteCategoryDropdown, setShowDeleteCategoryDropdown] = useState(false);
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedLocation(e.target.value);
@@ -119,10 +120,17 @@ const MenuItems = () => {
   };
 
   const handleDeleteMenuItem = async (id: number, locationId: number, categoryName: string) => {
-    if (!user?.is_super_admin) {
-      setError('Only super admins can delete menu items');
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Only super admins and franchise admins can delete menu items');
       return;
     }
+
+    // Check if franchise admin has access to this location
+    if (user?.is_franchise_admin && !locations.some(loc => loc.id === locationId)) {
+      setError('You can only delete menu items from your assigned locations');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this menu item?')) {
       try {
         const result = await useMenuStore.getState().deleteMenuItem(id, locationId, categoryName);
@@ -234,6 +242,48 @@ const MenuItems = () => {
     }
   };
 
+  // First, add this helper function to check if a user can delete a category
+  const canDeleteCategory = (locationId: number) => {
+    if (user?.is_super_admin) return true;
+    if (user?.is_franchise_admin) {
+      return locations.some(loc => loc.id === locationId);
+    }
+    return false;
+  };
+
+  // Update the handleDeleteCategory function
+  const handleDeleteCategory = async (categoryId: number, locationId: number, categoryName: string) => {
+    // Check if user has permission to delete categories
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Only super admins and franchise admins can delete categories');
+      return;
+    }
+
+    // Check if franchise admin has access to this location
+    if (user?.is_franchise_admin && !locations.some(loc => loc.id === locationId)) {
+      setError('You can only delete categories from your assigned locations');
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to delete the category "${categoryName}"? All menu items in this category will also be deleted.`)) {
+      try {
+        const result = await useMenuStore.getState().deleteCategory(categoryId, locationId);
+        if (result.success) {
+          setError(null);
+          if (selectedCategory === categoryName) {
+            setSelectedCategory('all');
+          }
+          setShowDeleteCategoryDropdown(false);
+          alert('Category deleted successfully');
+        } else {
+          setError(result.error || 'Failed to delete category');
+        }
+      } catch (err: any) {
+        setError(err.response?.data?.message || err.message || 'Error deleting category');
+      }
+    }
+  };
+
   const filteredMenuItems = menuItems.filter(
     (item) =>
       (selectedLocation === 'all' || String(item.location_id) === selectedLocation) &&
@@ -299,6 +349,53 @@ const MenuItems = () => {
                 <FaFolderPlus size={14} />
                 <span>Add Category</span>
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowDeleteCategoryDropdown(!showDeleteCategoryDropdown)}
+                  className="flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors"
+                >
+                  <FaTrash size={14} />
+                  <span>Delete Category</span>
+                </button>
+                {showDeleteCategoryDropdown && selectedLocation !== 'all' && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                    <div className="py-1">
+                      {categoryOptions.length > 0 ? (
+                        categoryOptions.map((cat) => {
+                          const canDelete = canDeleteCategory(cat.location_id);
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => {
+                                if (canDelete) {
+                                  handleDeleteCategory(cat.id, cat.location_id, cat.name);
+                                }
+                                setShowDeleteCategoryDropdown(false);
+                              }}
+                              className={`w-full text-left px-4 py-2 text-sm ${
+                                canDelete 
+                                  ? 'text-gray-700 hover:bg-gray-100' 
+                                  : 'text-gray-400 cursor-not-allowed'
+                              }`}
+                              disabled={!canDelete}
+                              title={!canDelete ? "You don't have permission to delete this category" : ""}
+                            >
+                              {cat.name}
+                              {!canDelete && (
+                                <span className="ml-2 text-xs text-gray-400">(No permission)</span>
+                              )}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          No categories available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleAddMenuItem}
                 className="flex items-center justify-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
@@ -364,7 +461,7 @@ const MenuItems = () => {
                         <FaEdit size={18} />
                       </span>
                     )}
-                    {user?.is_super_admin ? (
+                    {user?.is_super_admin || (user?.is_franchise_admin && locations.some(loc => loc.id === item.location_id)) ? (
                       <button 
                         onClick={() => handleDeleteMenuItem(item.id, item.location_id, item.category)}
                         className="text-red-500 hover:text-red-700"
@@ -374,7 +471,7 @@ const MenuItems = () => {
                     ) : (
                       <span
                         className="text-gray-400 cursor-not-allowed"
-                        title="Only super admins can delete menu items"
+                        title="Only super admins or assigned franchise admins can delete this menu item"
                       >
                         <FaTrash size={18} />
                       </span>

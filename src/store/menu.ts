@@ -51,6 +51,7 @@ interface MenuState {
         description?: string;
     }) => Promise<{ success: boolean; data?: any; error?: string }>;
     deleteMenuItem: (id: number, locationId: number, categoryName: string) => Promise<{ success: boolean; error?: string }>;
+    deleteCategory: (id: number, locationId: number) => Promise<{ success: boolean; error?: string }>;
 }
 
 const useMenuStore = create<MenuState>()(
@@ -65,7 +66,6 @@ const useMenuStore = create<MenuState>()(
                     grouped[locId].push({ ...cat, location_id: locId, menu_items: [] });
                 });
                 set({ categoriesByLocation: grouped });
-                console.log('\n\n\n grouped categories', grouped , '\n\n\n' )
             },
             setMenuItems: (menuItems: MenuitemApiResponse) => {
                 const categoriesByLocation = { ...get().categoriesByLocation };
@@ -78,7 +78,6 @@ const useMenuStore = create<MenuState>()(
                     }
                 });
                 set({ categoriesByLocation });
-                console.log('\n\n\n',categoriesByLocation,'\n\n\n')
             },
             addCategory: (category) => {
                 set((state) => {
@@ -275,6 +274,33 @@ const useMenuStore = create<MenuState>()(
                     return { 
                         success: false, 
                         error: error.response?.data?.message || error.message || 'Failed to delete menu item' 
+                    };
+                }
+            },
+            deleteCategory: async (id, locationId) => {
+                try {
+                    const response = await api.delete(`/menu/categories/`, {
+                        data: { id }
+                    });
+                    
+                    if (response.status === 200 || response.status === 204) {
+                        // Update the store
+                        set((state) => {
+                            const updated = { ...state.categoriesByLocation };
+                            if (updated[locationId]) {
+                                updated[locationId] = updated[locationId].filter(cat => cat.id !== id);
+                            }
+                            return { categoriesByLocation: updated };
+                        });
+
+                        return { success: true };
+                    }
+                    return { success: false, error: 'Failed to delete category' };
+                } catch (error: any) {
+                    console.error('Error deleting category:', error);
+                    return { 
+                        success: false, 
+                        error: error.response?.data?.message || error.message || 'Failed to delete category' 
                     };
                 }
             },

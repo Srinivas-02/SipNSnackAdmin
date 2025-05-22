@@ -7,6 +7,7 @@ export interface OrderItem {
   order_id: number;
   menu_item_id: number;
   menu_item__name?: string;
+  category?: string;
   quantity: number;
   price: number;
   notes?: string;

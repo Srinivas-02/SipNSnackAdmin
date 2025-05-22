@@ -6,8 +6,13 @@ import useLocationStore from '../../store/location';
 import useAccountStore from '../../store/account';
 import useStaffStore from '../../store/staff';
 
+interface Location {
+  id: number;
+  name: string;
+}
+
 interface UserWithLocation extends User {
-  locations?: { id: number; name: string }[];
+  locations?: Location[];
 }
 
 const Staff = () => {
@@ -170,6 +175,16 @@ const Staff = () => {
       setError('Please select at least one location');
       return;
     }
+
+    // Check if franchise admin is trying to assign staff to locations they don't manage
+    if (user?.is_franchise_admin) {
+      const adminLocationIds = user.assigned_locations?.map(loc => loc.id) || [];
+      const hasInvalidLocation = formData.location_ids.some(id => !adminLocationIds.includes(id));
+      if (hasInvalidLocation) {
+        setError('You can only assign staff to locations you manage');
+        return;
+      }
+    }
     
     try {
       setIsLoading(true);
@@ -200,6 +215,25 @@ const Staff = () => {
     if (!confirm('Are you sure you want to delete this staff member?')) {
       return;
     }
+
+    // Find the staff member to be deleted
+    const staffToDelete = users.find(user => user.id === userId);
+    if (!staffToDelete) {
+      setError('Staff member not found');
+      return;
+    }
+
+    // Check if franchise admin has permission to delete this staff member
+    if (user?.is_franchise_admin) {
+      const adminLocationIds = user.assigned_locations?.map(loc => loc.id) || [];
+      const staffLocationIds = staffToDelete.locations?.map(loc => loc.id) || [];
+      const hasPermission = staffLocationIds.some(id => adminLocationIds.includes(id));
+      
+      if (!hasPermission) {
+        setError('You do not have permission to delete this staff member');
+        return;
+      }
+    }
     
     try {
       setIsLoading(true);
@@ -215,6 +249,18 @@ const Staff = () => {
   };
 
   const openEditModal = (user: UserWithLocation) => {
+    // Check if franchise admin has permission to edit this staff member
+    if (user?.is_franchise_admin) {
+      const adminLocationIds = user.assigned_locations?.map(loc => loc.id) || [];
+      const staffLocationIds = user.locations?.map(loc => loc.id) || [];
+      const hasPermission = staffLocationIds.some(id => adminLocationIds.includes(id));
+      
+      if (!hasPermission) {
+        setError('You do not have permission to edit this staff member');
+        return;
+      }
+    }
+
     setSelectedUser(user);
     setFormData({
       email: user.email,
@@ -230,24 +276,44 @@ const Staff = () => {
 
   // Get available locations for the dropdown
   const getAvailableLocations = () => {
-    // Debug logs
-    console.log('Current user:', user);
-    console.log('User type:', user?.is_super_admin ? 'Super Admin' : user?.is_franchise_admin ? 'Franchise Admin' : 'Unknown');
-    console.log('Assigned locations:', user?.assigned_locations);
-
     if (user?.is_super_admin) {
       return locations || [];
     }
     if (user?.is_franchise_admin) {
-      // For franchise admin, return their assigned locations from the user object
       if (!user.assigned_locations || user.assigned_locations.length === 0) {
         console.log('No assigned locations found for franchise admin');
         return [];
       }
-      console.log('Returning franchise admin locations:', user.assigned_locations);
       return user.assigned_locations;
     }
     return [];
+  };
+
+  // Check if user can add/edit staff
+  const canManageStaff = user?.is_super_admin || user?.is_franchise_admin;
+  
+  // Check if user can delete specific staff member
+  const canDeleteStaff = (user: User | null, staffLocations: Location[]) => {
+    if (!user) return false;
+    if (user.is_super_admin) return true;
+    if (user.is_franchise_admin) {
+      const adminLocationIds = user.assigned_locations?.map(loc => loc.id) || [];
+      const hasMatchingLocation = staffLocations.some(loc => adminLocationIds.includes(loc.id));
+      return hasMatchingLocation;
+    }
+    return false;
+  };
+
+  // Check if user can edit specific staff member
+  const canEditStaff = (user: User | null, staffLocations: Location[]) => {
+    if (!user) return false;
+    if (user.is_super_admin) return true;
+    if (user.is_franchise_admin) {
+      const adminLocationIds = user.assigned_locations?.map(loc => loc.id) || [];
+      const hasMatchingLocation = staffLocations.some(loc => adminLocationIds.includes(loc.id));
+      return hasMatchingLocation;
+    }
+    return false;
   };
 
   if (isLoading && users.length === 0) {
@@ -264,7 +330,7 @@ const Staff = () => {
         <h2 className="text-xl font-semibold text-gray-800">
           Staff Management
         </h2>
-        {user?.is_super_admin && (
+        {canManageStaff && (
           <button
             onClick={() => {
               setFormData({
@@ -351,18 +417,23 @@ const Staff = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(staff)}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
-                    >
-                      <FaEdit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteUser(staff.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <FaTrash size={18} />
-                    </button>
+                    {canEditStaff(user, staff.locations || []) && (
+                      <button
+                        onClick={() => openEditModal(staff)}
+                        className="text-blue-600 hover:text-blue-900 mr-4"
+                      >
+                        <FaEdit size={18} />
+                      </button>
+                    )}
+                    {canDeleteStaff(user, staff.locations || []) && (
+                      <button 
+                        onClick={() => handleDeleteUser(staff.id)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Delete Staff Member"
+                      >
+                        <FaTrash size={18} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
@@ -599,4 +670,4 @@ const Staff = () => {
   );
 };
 
-export default Staff; 
+export default Staff;

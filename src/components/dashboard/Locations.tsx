@@ -2,7 +2,6 @@ import { FaPlus, FaTrash, FaTimes, FaMapMarkerAlt, FaBuilding, FaUserShield, FaE
 import useLocationStore from '../../store/location';
 import useAccountStore from '../../store/account';
 import { useState, useEffect } from 'react';
-import api from '../../common/api';
 
 // Define Location type to match backend LocationModel
 interface Location {
@@ -90,6 +89,8 @@ const Locations = () => {
     last_name: '',
     location_ids: [],
   });
+
+  const [loginTime] = useState(() => new Date());
 
   useEffect(() => {
     fetchFranchiseAdmins().catch((err) => {
