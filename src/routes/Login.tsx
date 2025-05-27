@@ -69,6 +69,7 @@ const Login = () => {
       window.google.accounts.id.initialize({
         client_id: CLIENT_ID,
         callback: handleCredentialResponse,
+        // hosted_domain : 'sn15.ai'
       })
       window.google.accounts.id.renderButton(
         googleDivRef.current,
@@ -341,7 +342,24 @@ const Login = () => {
         </div>
 
         {/* ← this is where GSI injects its styled button */}
-        <div ref={googleDivRef} />
+        <div className="relative mb-6">
+    <div className="absolute inset-0 flex items-center">
+      {/* This is the border that will stretch across the Google button */}
+      <div className="w-full border-t border-gray-300"></div>
+    </div>
+    <div className="relative flex justify-center items-center text-sm">
+      {/* Google Sign-In button */}
+      <div ref={googleDivRef} className="flex items-center space-x-2 px-4 py-2">
+        {/* Google icon */}
+        <img
+          src="google-icon-path" // replace with the path to the Google icon
+          alt="Google"
+          className="w-5 h-5"
+        />
+        <span>Sign in with Google</span>
+      </div>
+    </div>
+  </div>
       </motion.div>
                     
                     <motion.div 
