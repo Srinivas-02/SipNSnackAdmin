@@ -166,11 +166,21 @@ const MenuItems = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      console.log(formData)
-      const response = await api.post('/menu/menu-items/', {
-        ...formData
-      });
-      if (response.status === 201) {
+      let response;
+      if (currentItem) {
+        // Update existing menu item using PATCH
+        response = await api.patch('/menu/menu-items/', {
+          id: currentItem.id,
+          ...formData
+        });
+      } else {
+        // Create new menu item
+        response = await api.post('/menu/menu-items/', {
+          ...formData
+        });
+      }
+
+      if (response.status === 200 || response.status === 201) {
         // Find the category name using category_id and location_id
         let categoryName = '';
         if (formData.location_id && formData.category_id) {
@@ -178,21 +188,30 @@ const MenuItems = () => {
           const found = cats.find((cat) => cat.id === formData.category_id);
           if (found) categoryName = found.name;
         }
+
         // Construct the full menu item object
         if (formData.location_id !== undefined) {
-          const newMenuItem = {
-            id: response.data.id,
-            name: response.data.name,
+          const menuItem = {
+            id: currentItem ? currentItem.id : response.data.id,
+            name: response.data.name || formData.name,  // Fallback to form data if response doesn't include it
             price: formData.price,
             category: categoryName,
             location_id: Number(formData.location_id),
             image: formData.image ?? '',
             description: formData.description ?? '',
           };
-          useMenuStore.getState().addMenuItem(newMenuItem);
+
+          if (currentItem) {
+            useMenuStore.getState().updateMenuItem(menuItem);
+            toast.success('Menu item updated successfully');
+          } else {
+            useMenuStore.getState().addMenuItem(menuItem);
+            toast.success('Menu item added successfully');
+          }
         }
+
         setShowModal(false);
-        // Optionally reset form
+        // Reset form and current item
         setFormData({
           name: '',
           price: 0,
@@ -201,10 +220,10 @@ const MenuItems = () => {
           location_id: selectedLocation !== 'all' ? Number(selectedLocation) : undefined,
           description: '',
         });
-        toast.success('Menu item added successfully');
+        setCurrentItem(null);
       }
     } catch (err: unknown) {
-      let errorMessage = 'Error adding menu item';
+      let errorMessage = currentItem ? 'Error updating menu item' : 'Error adding menu item';
       if (err && typeof err === 'object' && 'response' in err) {
         const errorResponse = err as { response?: { data?: { message?: string } } };
         if (errorResponse.response?.data?.message) {
@@ -212,7 +231,7 @@ const MenuItems = () => {
         }
       }
       toast.error(errorMessage);
-      console.error('Error adding menu item:', err);
+      console.error(currentItem ? 'Error updating menu item:' : 'Error adding menu item:', err);
     }
   };
 
@@ -287,9 +306,12 @@ const MenuItems = () => {
     }
 
     try {
-      await api.delete(`/menu/categories/`, {
+      // Send the delete request with the id as a query parameter
+      await api.delete('/menu/categories/', {
         params: { id: categoryId }
       });
+      
+      // Only update the store if the delete was successful
       useMenuStore.getState().deleteCategory(categoryId);
       toast.success('Category deleted successfully');
     } catch (err: unknown) {
@@ -365,9 +387,9 @@ const MenuItems = () => {
   const filteredMenuItems = menuItems.filter(
     (item) =>
       (selectedLocation === 'all' || String(item.location_id) === selectedLocation) &&
-      (selectedCategory === null || item.category === selectedCategory.name) &&
-      (item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.category || '').toLowerCase().includes(searchTerm.toLowerCase()))
+      (selectedCategory === null || (item.category && item.category === selectedCategory.name)) &&
+      ((item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ((item.category || '').toLowerCase().includes(searchTerm.toLowerCase())))
   );
 
   // Get categories for filter dropdown

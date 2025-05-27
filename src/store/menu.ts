@@ -14,6 +14,7 @@ interface MenuItem {
     name: string,
     price: number,
     category: string,
+    category_id?: number,
     location_id: number,
     image?: string | null
 }
@@ -58,6 +59,13 @@ const useMenuStore = create<MenuState>()((set, get) => ({
     },
     setMenuItems: (menuItems: MenuitemApiResponse) => {
         const categoriesByLocation = { ...get().categoriesByLocation };
+        // First, clear existing menu items for all categories
+        Object.values(categoriesByLocation).forEach(categories => {
+            categories.forEach(category => {
+                category.menu_items = [];
+            });
+        });
+        // Then add the menu items to their respective categories
         menuItems.menu_items.forEach((item: MenuItem) => {
             const locId = item.location_id;
             const categoryArr = categoriesByLocation[locId];
@@ -97,6 +105,7 @@ const useMenuStore = create<MenuState>()((set, get) => ({
             set({ loading: true, error: null });
             const response = await api.get('/menu/categories/');
             const categories = response.data.categories;
+            console.log("The value of the categories:", JSON.stringify(categories, null, 2));
             
             // Organize categories by location
             const categoriesByLocation: { [key: number]: Category[] } = {};
@@ -151,10 +160,12 @@ const useMenuStore = create<MenuState>()((set, get) => ({
         set((state) => {
             const newCategoriesByLocation = { ...state.categoriesByLocation };
             
-            // Find and remove the category from its location
+            // Safely filter out the category from each location's array
             Object.keys(newCategoriesByLocation).forEach((locationId) => {
-                newCategoriesByLocation[Number(locationId)] = newCategoriesByLocation[Number(locationId)]
-                    .filter(cat => cat.id !== categoryId);
+                const locationCategories = newCategoriesByLocation[Number(locationId)];
+                if (Array.isArray(locationCategories)) {
+                    newCategoriesByLocation[Number(locationId)] = locationCategories.filter(cat => cat.id !== categoryId);
+                }
             });
             
             return { categoriesByLocation: newCategoriesByLocation };
@@ -165,17 +176,17 @@ const useMenuStore = create<MenuState>()((set, get) => ({
             const locationId = updatedItem.location_id;
             const categories = state.categoriesByLocation[locationId] || [];
             
-            const updatedCategories = categories.map(category => {
-                if (category.id === updatedItem.category_id) {
-                    return {
-                        ...category,
-                        menu_items: category.menu_items.map(item => 
-                            item.id === updatedItem.id ? updatedItem : item
-                        )
-                    };
-                }
-                return category;
-            });
+            // First, find and remove the item from its current category
+            const updatedCategories = categories.map(category => ({
+                ...category,
+                menu_items: category.menu_items.filter(item => item.id !== updatedItem.id)
+            }));
+
+            // Then add the item to its new category
+            const targetCategory = updatedCategories.find(cat => cat.name === updatedItem.category);
+            if (targetCategory) {
+                targetCategory.menu_items.push(updatedItem);
+            }
 
             return {
                 categoriesByLocation: {
