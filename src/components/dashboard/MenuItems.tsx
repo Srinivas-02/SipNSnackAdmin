@@ -252,6 +252,9 @@ const MenuItems = () => {
         });
         setShowCategoryModal(false);
         
+        // Refresh categories to ensure we have the latest data
+        await fetchCategories();
+        
         toast.success('Category created successfully');
       }
     } catch (err: unknown) {

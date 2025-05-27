@@ -40,13 +40,13 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Dashboard', 
       path: '/dashboard', 
       icon: <FaHome size={20} />,
-      roles: ['super', 'franchise', 'staff'] // Everyone can see the dashboard
+      roles: ['super', 'franchise'] // Everyone can see the dashboard
     },
     { 
       name: 'Franchise Locations', 
       path: '/dashboard/locations', 
       icon: <FaStore size={20} />,
-      roles: ['super'] // Only super admin can manage all franchise locations
+      roles: ['super', 'franchise'] // Only super admin can manage all franchise locations
     },
     { 
       name: 'My Location', 
@@ -64,7 +64,7 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Orders', 
       path: '/dashboard/orders', 
       icon: <FaHistory size={20} />,
-      roles: ['super', 'franchise', 'staff'] // Everyone can see orders
+      roles: ['super', 'franchise'] // Everyone can see orders
     },
     { 
       name: 'Feedback', 
@@ -76,7 +76,7 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Staff', 
       path: '/dashboard/users', 
       icon: <FaUsers size={20} />,
-      roles: ['super'] // Only super admin can manage users
+      roles: ['super', 'franchise'] // Only super admin can manage users
     },
     { 
       name: 'Analytics', 
@@ -88,7 +88,7 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Settings', 
       path: '/dashboard/settings', 
       icon: <FaCog size={20} />,
-      roles: ['super', 'franchise', 'staff'] // Everyone can see settings
+      roles: ['super', 'franchise'] // Everyone can see settings
     },
   ];
 
@@ -96,7 +96,6 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
   const userRoles: string[] = [];
   if (user?.is_super_admin) userRoles.push('super');
   if (user?.is_franchise_admin) userRoles.push('franchise');  
-  if (user?.is_staff_member) userRoles.push('staff');
 
   // Filter menu items based on user's role
   const visibleMenuItems = allMenuItems.filter(item => 
@@ -173,11 +172,6 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
                 {user.is_franchise_admin && (
                   <span className="text-xs bg-green-400 text-blue-900 px-2 py-1 rounded-full">
                     Franchise Admin
-                  </span>
-                )}
-                {user.is_staff_member && (
-                  <span className="text-xs bg-gray-300 text-blue-900 px-2 py-1 rounded-full">
-                    Staff
                   </span>
                 )}
               </div>

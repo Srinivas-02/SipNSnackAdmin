@@ -22,7 +22,7 @@ const Dashboard = () => {
         if (!user) return false;
         
         // Routes only super admin can access
-        const superAdminRoutes = ['/dashboard/users', '/dashboard/locations'];
+        const superAdminRoutes = ['/dashboard/users'];
         
         // Routes only franchise admin can access
         const franchiseAdminRoutes = ['/dashboard/my-location'];
