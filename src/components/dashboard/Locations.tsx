@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import api from '../../common/api'
 import Select from 'react-select';
 import toast from 'react-hot-toast';
+import { State, City } from 'country-state-city';
 
 function isApiError(err: unknown): err is { response: { data: { message: string } } } {
   if (
@@ -96,6 +97,33 @@ const Locations = () => {
       location_ids: selectedOptions ? selectedOptions.map(option => option.value) : []
     }));
   };
+
+  // Add new state for Indian states and cities
+  const [indianStates, setIndianStates] = useState<Array<{ value: string; label: string }>>([]);
+  const [indianCities, setIndianCities] = useState<Array<{ value: string; label: string }>>([]);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+
+  // Initialize Indian states
+  useEffect(() => {
+    const states = State.getStatesOfCountry('IN').map(state => ({
+      value: state.isoCode,
+      label: state.name
+    }));
+    setIndianStates(states);
+  }, []);
+
+  // Update cities when state changes
+  useEffect(() => {
+    if (selectedState) {
+      const cities = City.getCitiesOfState('IN', selectedState).map(city => ({
+        value: city.name,
+        label: city.name
+      }));
+      setIndianCities(cities);
+    } else {
+      setIndianCities([]);
+    }
+  }, [selectedState]);
 
   useEffect(() => {
     // Fetch franchise admins when component mounts
@@ -504,30 +532,43 @@ const Locations = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    City
+                    State
                   </label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter city"
-                    required
+                  <Select
+                    options={indianStates}
+                    value={indianStates.find(state => state.label === formData.state)}
+                    onChange={(selected) => {
+                      setSelectedState(selected?.value || null);
+                      setFormData(prev => ({
+                        ...prev,
+                        state: selected?.label || '',
+                        city: '' // Reset city when state changes
+                      }));
+                    }}
+                    className="basic-select"
+                    classNamePrefix="select"
+                    placeholder="Select state..."
+                    isClearable
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    State
+                    City
                   </label>
-                  <input
-                    type="text"
-                    name="state"
-                    value={formData.state}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter state"
-                    required
+                  <Select
+                    options={indianCities}
+                    value={indianCities.find(city => city.label === formData.city)}
+                    onChange={(selected) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        city: selected?.label || ''
+                      }));
+                    }}
+                    className="basic-select"
+                    classNamePrefix="select"
+                    placeholder="Select city..."
+                    isClearable
+                    isDisabled={!selectedState}
                   />
                 </div>
               </div>

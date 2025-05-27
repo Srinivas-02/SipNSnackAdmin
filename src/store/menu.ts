@@ -143,15 +143,28 @@ const useMenuStore = create<MenuState>()((set, get) => ({
     },
     updateCategory: (updatedCategory: Category) => {
         set((state) => {
-            const currentCategories = state.categoriesByLocation[updatedCategory.location_id] || [];
+            const locationId = updatedCategory.location_id;
+            const currentCategories = state.categoriesByLocation[locationId] || [];
+            
+            // Find the existing category to preserve its menu_items
+            const existingCategory = currentCategories.find(cat => cat.id === updatedCategory.id);
+            
+            // Create the updated category with preserved menu_items
+            const categoryWithMenuItems = {
+                ...updatedCategory,
+                menu_items: existingCategory ? existingCategory.menu_items : []
+            };
+            
+            // Update the categories array for this location
             const updatedCategories = currentCategories.map(cat => 
-                cat.id === updatedCategory.id ? updatedCategory : cat
+                cat.id === updatedCategory.id ? categoryWithMenuItems : cat
             );
             
+            // Return new state with updated categories
             return {
                 categoriesByLocation: {
                     ...state.categoriesByLocation,
-                    [updatedCategory.location_id]: updatedCategories
+                    [locationId]: updatedCategories
                 }
             };
         });

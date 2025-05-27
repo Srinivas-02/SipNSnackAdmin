@@ -128,7 +128,7 @@ const MenuItems = () => {
       category_id: categoryId,
       image: item.image ?? '',
       location_id: item.location_id,
-      description: item.description ?? '',
+      description: item.description || '',
     });
     setShowModal(true);
   };
@@ -271,8 +271,9 @@ const MenuItems = () => {
         });
         setShowCategoryModal(false);
         
-        // Refresh categories to ensure we have the latest data
+        // Refresh both categories and menu items to ensure we have the latest data
         await fetchCategories();
+        await fetchMenuItems();
         
         toast.success('Category created successfully');
       }
@@ -351,9 +352,10 @@ const MenuItems = () => {
           ...selectedCategory,
           name: categoryForm.name,
           location_id: categoryForm.location_id,
-          display_order: categoryForm.display_order,
-          menu_items: selectedCategory.menu_items || [], // Preserve menu items
+          display_order: categoryForm.display_order
         };
+        
+        // Update the store
         useMenuStore.getState().updateCategory(updatedCategory);
 
         // Reset form and close modal
@@ -364,9 +366,6 @@ const MenuItems = () => {
         });
         setShowCategoryEditModal(false);
         setSelectedCategory(null);
-        
-        // Refresh categories to ensure we have the latest data
-        fetchCategories();
         
         toast.success('Category updated successfully');
       }
@@ -587,7 +586,7 @@ const MenuItems = () => {
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     rows={3}
-                    required
+                    placeholder="Enter description (optional)"
                   />
                 </div>
                 <div>
@@ -607,19 +606,18 @@ const MenuItems = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category
+                    Location
                   </label>
                   <select
-                    name="category_id"
-                    value={formData.category_id !== undefined && formData.category_id !== null ? String(formData.category_id) : ''}
+                    name="location_id"
+                    value={formData.location_id !== undefined && formData.location_id !== null ? String(formData.location_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
-                    disabled={!formData.location_id}
                   >
-                    <option value="">Select a category</option>
-                    {getCategoriesForLocation(formData.location_id).map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option value="">Select a location</option>
+                    {locations.map((location) => (
+                      <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
                     ))}
                   </select>
                 </div>
@@ -638,18 +636,19 @@ const MenuItems = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location
+                    Category
                   </label>
                   <select
-                    name="location_id"
-                    value={formData.location_id !== undefined && formData.location_id !== null ? String(formData.location_id) : ''}
+                    name="category_id"
+                    value={formData.category_id !== undefined && formData.category_id !== null ? String(formData.category_id) : ''}
                     onChange={handleFormChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     required
+                    disabled={!formData.location_id}
                   >
-                    <option value="">Select a location</option>
-                    {locations.map((location) => (
-                      <option key={String(location.id)} value={String(location.id)}>{location.name}</option>
+                    <option value="">Select a category</option>
+                    {getCategoriesForLocation(formData.location_id).map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
                 </div>
