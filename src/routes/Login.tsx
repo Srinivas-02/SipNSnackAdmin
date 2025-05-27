@@ -1,5 +1,5 @@
 import logo from '../assets/Logo.png'
-import { useState, useEffect } from 'react';
+import { useState, useEffect ,useRef} from 'react';
 import { motion } from 'framer-motion';
 import api from '../common/api'
 import useAccountStore from '../store/account'
@@ -7,6 +7,8 @@ import useMenuStore from '../store/menu'
 import useLocationStore from '../store/location'
 import { useNavigate } from 'react-router-dom';
 
+
+const CLIENT_ID = '446831322561-oiij4g360mpf1ams94sh41c9iks52c7b.apps.googleusercontent.com';
 
 const Login = () => {
     const { setDetails, isAuthenticated } = useAccountStore();
@@ -21,6 +23,65 @@ const Login = () => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     
+    const googleDivRef = useRef<HTMLDivElement>(null);
+
+
+
+
+  const handleCredentialResponse = async (resp: { credential: string }) => {
+  console.log('👉 Google ID Token:', resp.credential);
+  setError('');
+  try {
+    setIsLoading(true);
+
+    const res = await api.post('/accounts/google/login/', {
+      token: resp.credential,
+    });
+
+    // save your JWTs + user data
+    setDetails(res.data);
+
+    // now fetch dashboard data and redirect as usual
+    const ok = await fetchInitialData();
+    if (!ok) {
+      setError('Error loading dashboard data');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(false);
+    // your useEffect on isAuthenticated will navigate to /dashboard
+
+  } catch (err: any) {
+    setIsLoading(false);
+    console.error('Google login failed', err);
+    setError(err.response?.data?.error || 'Google sign-in failed');
+  }
+};
+
+  // 4️⃣ Initialize GSI and render the button once:
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      window.google?.accounts &&
+      googleDivRef.current
+    ) {
+      window.google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: handleCredentialResponse,
+        // hosted_domain : 'sn15.ai'
+      })
+      window.google.accounts.id.renderButton(
+        googleDivRef.current,
+        { theme: 'outline', size: 'large', width: '100%' }
+      )
+      // optionally: window.google.accounts.id.prompt()
+    }
+  }, [])  // empty deps → run once on mount
+
+
+
+
     // Effect to redirect if authenticated
     useEffect(() => {
         if (isAuthenticated) {
@@ -262,6 +323,44 @@ const Login = () => {
                             {error}
                         </motion.div>
                     )}
+
+                     <motion.div
+        className="mt-6 text-center"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 1.0 }}
+      >
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">
+              Or continue with
+            </span>
+          </div>
+        </div>
+
+        {/* ← this is where GSI injects its styled button */}
+        <div className="relative mb-6">
+    <div className="absolute inset-0 flex items-center">
+      {/* This is the border that will stretch across the Google button */}
+      <div className="w-full border-t border-gray-300"></div>
+    </div>
+    <div className="relative flex justify-center items-center text-sm">
+      {/* Google Sign-In button */}
+      <div ref={googleDivRef} className="flex items-center space-x-2 px-4 py-2">
+        {/* Google icon */}
+        <img
+          src="google-icon-path" // replace with the path to the Google icon
+          alt="Google"
+          className="w-5 h-5"
+        />
+        <span>Sign in with Google</span>
+      </div>
+    </div>
+  </div>
+      </motion.div>
                     
                     <motion.div 
                         className="mt-6 text-center text-sm"
