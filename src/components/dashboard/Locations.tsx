@@ -47,13 +47,11 @@ const Locations = () => {
   const franchiseAdmins = useLocationStore((state) => state.franchiseAdmins) || [];
   const loading = useLocationStore((state) => state.loading);
   const fetchFranchiseAdmins = useLocationStore((state) => state.fetchFranchiseAdmins);
-  const addFranchiseAdmin = useLocationStore((state) => state.addFranchiseAdmin);
   const addLocation = useLocationStore((state) => state.addLocation);
   const updateLocation = useLocationStore((state) => state.updateLocation);
   const deleteLocation = useLocationStore((state) => state.deleteLocation);
   const { user } = useAccountStore();
   const [showModal, setShowModal] = useState(false);
-  const [showAdminModal, setShowAdminModal] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -75,22 +73,6 @@ const Locations = () => {
     password: '',
     status: 'active'
   });
-
-  const [adminFormData, setAdminFormData] = useState<{
-    email: string;
-    password: string;
-    first_name: string;
-    last_name: string;
-    location_ids: number[];
-  }>({
-    email: '',
-    password: '',
-    first_name: '',
-    last_name: '',
-    location_ids: [],
-  });
-
-  const [loginTime] = useState(() => new Date());
 
   useEffect(() => {
     fetchFranchiseAdmins().catch((err) => {
@@ -116,20 +98,6 @@ const Locations = () => {
     }
   }, [showModal]);
 
-  useEffect(() => {
-    if (!showAdminModal) {
-      setAdminFormData({
-        email: '',
-        password: '',
-        first_name: '',
-        last_name: '',
-        location_ids: [],
-      });
-      setcpassword('');
-      setError('');
-    }
-  }, [showAdminModal]);
-
   const handleAddLocation = () => {
     setCurrentLocation(null);
     setFormData({
@@ -144,12 +112,6 @@ const Locations = () => {
     setError('');
     setcpassword('');
     setShowModal(true);
-  };
-
-  const handleAddAdmin = () => {
-    setError('');
-    setcpassword('');
-    setShowAdminModal(true);
   };
 
   const handleEditLocation = (location: Location) => {
@@ -189,28 +151,6 @@ const Locations = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleAdminFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name === 'location_ids' && e.target instanceof HTMLSelectElement) {
-      const options = e.target.options;
-      const selectedValues: number[] = [];
-      for (let i = 0; i < options.length; i++) {
-        if (options[i].selected) {
-          selectedValues.push(Number(options[i].value));
-        }
-      }
-      setAdminFormData(prev => ({
-        ...prev,
-        location_ids: selectedValues
-      }));
-    } else {
-      setAdminFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -245,37 +185,6 @@ const Locations = () => {
         setError(err.response.data.error || err.response.data.message || 'Failed to process request');
       } else {
         setError(currentLocation ? 'Failed to update location' : 'Failed to add location');
-      }
-    }
-  };
-
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (adminFormData.password !== cpassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    if (adminFormData.location_ids.length === 0) {
-      setError('Please select at least one location');
-      return;
-    }
-    try {
-      await addFranchiseAdmin(adminFormData);
-      setShowAdminModal(false);
-      setAdminFormData({
-        email: '',
-        password: '',
-        first_name: '',
-        last_name: '',
-        location_ids: [],
-      });
-      setcpassword('');
-    } catch (err: unknown) {
-      if (isApiError(err)) {
-        setError(err.response.data.error || err.response.data.message || 'Failed to add franchise admin');
-      } else {
-        setError('Failed to add franchise admin');
       }
     }
   };
@@ -326,15 +235,6 @@ const Locations = () => {
             >
               <FaPlus size={14} />
               <span>Add New Location</span>
-            </button>
-          )}
-          {user?.is_super_admin && (
-            <button
-              onClick={handleAddAdmin}
-              className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-            >
-              <FaUserShield size={14} />
-              <span>Add Franchise Admin</span>
             </button>
           )}
         </div>
@@ -575,140 +475,6 @@ const Locations = () => {
                   disabled={Boolean(formData.password && formData.password !== cpassword)}
                 >
                   {currentLocation ? 'Update' : 'Add'} Location
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Franchise Admin Modal */}
-      {showAdminModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-90vh overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">Add Franchise Admin</h3>
-              <button
-                onClick={() => setShowAdminModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close modal"
-              >
-                <FaTimes size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleAdminSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                  <input
-                    type="text"
-                    name="first_name"
-                    value={adminFormData.first_name}
-                    onChange={handleAdminFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter first name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    name="last_name"
-                    value={adminFormData.last_name}
-                    onChange={handleAdminFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter last name"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={adminFormData.email}
-                  onChange={handleAdminFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Email address"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={adminFormData.password}
-                    onChange={handleAdminFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter password"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                  <input
-                    type="password"
-                    name="confirm_password"
-                    value={cpassword}
-                    onChange={(e) => {
-                      setcpassword(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    onBlur={() => {
-                      if (adminFormData.password !== cpassword) {
-                        setError('Passwords do not match');
-                      } else {
-                        setError(null);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Confirm Password"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assign Locations</label>
-                <select
-                  name="location_ids"
-                  multiple
-                  value={adminFormData.location_ids.map(id => id.toString())}
-                  onChange={handleAdminFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  required
-                  size={Math.min(5, locations.length)}
-                >
-                  {locations.map(location => (
-                    <option key={location.id} value={location.id}>
-                      {location.name} ({location.city}, {location.state})
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">Hold Ctrl/Cmd to select multiple locations</p>
-              </div>
-              {error && (
-                <div className="text-red-600 text-sm mb-2">{error}</div>
-              )}
-              <div className="pt-4 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAdminModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={`px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500${
-                    adminFormData.password !== cpassword || loading ? ' opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  disabled={adminFormData.password !== cpassword || loading}
-                >
-                  {loading ? 'Adding...' : 'Add Franchise Admin'}
                 </button>
               </div>
             </form>

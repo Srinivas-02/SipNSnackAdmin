@@ -11,7 +11,8 @@ import {
   FaTimes,
   FaUsers,
   FaCog,
-  FaChartBar
+  FaChartBar,
+  FaUserShield
 } from 'react-icons/fa';
 import useAccountStore from '../store/account';
 
@@ -47,6 +48,12 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       path: '/dashboard/locations', 
       icon: <FaStore size={20} />,
       roles: ['super'] // Only super admin can manage all franchise locations
+    },
+    { 
+      name: 'Franchise Admins', 
+      path: '/dashboard/franchise-admins', 
+      icon: <FaUserShield size={20} />,
+      roles: ['super'] // Only super admin can manage franchise admins
     },
     { 
       name: 'My Location', 

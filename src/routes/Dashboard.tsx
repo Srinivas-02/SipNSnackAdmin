@@ -10,6 +10,7 @@ import Feedback from '../components/dashboard/Feedback';
 import Staff from '../components/dashboard/Staff';
 import Analytics from '../components/dashboard/Analytics';
 import Settings from '../components/dashboard/Settings';
+import FranchiseAdmins from '../components/dashboard/FranchiseAdmins';
 import useAccountStore from '../store/account';
 
 const Dashboard = () => {
@@ -63,6 +64,7 @@ const Dashboard = () => {
         const pathMap: Record<string, string> = {
             '/dashboard': 'Dashboard Overview',
             '/dashboard/locations': 'Manage Franchise Locations',
+            '/dashboard/franchise-admins': 'Manage Franchise Admins',
             '/dashboard/my-location': 'My Location',
             '/dashboard/menu-items': 'Menu Items',
             '/dashboard/orders': 'Order History',
@@ -99,6 +101,14 @@ const Dashboard = () => {
                             element={
                                 checkPermission('/dashboard/locations') 
                                     ? <Locations /> 
+                                    : <Navigate to="/dashboard" replace />
+                            } 
+                        />
+                        <Route 
+                            path="/franchise-admins" 
+                            element={
+                                checkPermission('/dashboard/franchise-admins') 
+                                    ? <FranchiseAdmins /> 
                                     : <Navigate to="/dashboard" replace />
                             } 
                         />

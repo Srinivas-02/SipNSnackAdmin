@@ -73,15 +73,10 @@ const MyLocation = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<LocationData & { password: string; confirm_password: string }>>({});
   const [cpassword, setCpassword] = useState('');
-  const [loginTime, setLoginTime] = useState<Date>(new Date());
 
   // Get user information and store functions
   const { user } = useAccountStore();
   const { locations, setLocations } = useLocationStore();
-
-  const accessibleLocations = user?.is_super_admin 
-    ? locations 
-    : locations.filter(loc => user?.assigned_locations?.some(al => al.id === loc.id));
 
   useEffect(() => {
     const fetchMyLocations = async () => {
@@ -183,11 +178,6 @@ const MyLocation = () => {
       console.log('Selected location email:', selectedLocation.email);
     }
   }, [selectedLocation]);
-
-  // Add login time tracking
-  useEffect(() => {
-    setLoginTime(new Date());
-  }, []);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
@@ -502,16 +492,12 @@ const MyLocation = () => {
                     setFormData(selectedLocation);
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                >
-                  Cancel
-                </button>
+                >Cancel</button>
                 <button
                   type="submit"
                   className={`px-4 py-2 bg-blue-600 text-white rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   disabled={isLoading}
-                >
-                  {isLoading ? 'Saving...' : 'Save Changes'}
-                </button>
+                >{isLoading ? 'Saving...' : 'Save Changes'}</button>
               </div>
             </motion.form>
           ) : (
@@ -542,17 +528,18 @@ const MyLocation = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="bg-gray-50 rounded p-3">
                     <p className="font-medium text-gray-700">Login Date</p>
-                    <p className="text-gray-700">{formatDate(loginTime)}</p>
+                    <p className="text-gray-700">{formatDate(user?.login_time || new Date())}</p>
                   </div>
                   <div className="bg-gray-50 rounded p-3">
                     <p className="font-medium text-gray-700">Login Time</p>
-                    <p className="text-gray-700">{formatTime(loginTime)}</p>
+                    <p className="text-gray-700">{formatTime(user?.login_time || new Date())}</p>
                   </div>
                   <div className="bg-gray-50 rounded p-3">
                     <p className="font-medium text-gray-700">Duration</p>
                     <p className="text-gray-700">
                       {(() => {
                         const now = new Date();
+                        const loginTime = user?.login_time || new Date();
                         const diff = now.getTime() - loginTime.getTime();
                         const hours = Math.floor(diff / (1000 * 60 * 60));
                         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));

@@ -10,7 +10,8 @@ export interface User {
     is_super_admin: boolean,
     is_franchise_admin: boolean,
     is_staff_member: boolean,
-    assigned_locations?: { id: number, name: string }[]
+    assigned_locations?: { id: number, name: string }[],
+    login_time: Date
 }
 
 interface AuthResponse {
@@ -41,12 +42,18 @@ const useAccountStore = create<AccountState>()(
                 // Update API header
                 api.defaults.headers.common['Authorization'] = `Bearer ${response.access}`;
                 
+                // Create a new user object with login_time
+                const userWithLoginTime = {
+                    ...response.user,
+                    login_time: new Date() // Set the actual login time
+                };
+                
                 // Update store state
                 set({
                     isAuthenticated: true,
                     refresh_token: response.refresh,
                     access_token: response.access,
-                    user: response.user
+                    user: userWithLoginTime
                 });
             },
             
@@ -68,6 +75,15 @@ const useAccountStore = create<AccountState>()(
                 if (state.access_token) {
                     api.defaults.headers.common['Authorization'] = `Bearer ${state.access_token}`;
                 }
+                if (state.user?.login_time) {
+                    // Convert string back to Date
+                    set({
+                        user: {
+                            ...state.user,
+                            login_time: new Date(state.user.login_time)
+                        }
+                    });
+                }
             }
         }),
         {
@@ -77,7 +93,10 @@ const useAccountStore = create<AccountState>()(
                 isAuthenticated: state.isAuthenticated,
                 refresh_token: state.refresh_token,
                 access_token: state.access_token,
-                user: state.user
+                user: state.user ? {
+                    ...state.user,
+                    login_time: state.user.login_time.toISOString() // Convert Date to string for storage
+                } : null
             })
         }
     )

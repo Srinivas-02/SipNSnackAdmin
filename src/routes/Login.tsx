@@ -34,6 +34,7 @@ const Login = () => {
 
     const fetchInitialData = async () => {
         try {
+            
             // Get locations data
             const locationResponse = await api.get('/locations/');
             setLocations(locationResponse.data); // Make sure to use .data property
