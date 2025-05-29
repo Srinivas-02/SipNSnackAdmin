@@ -12,12 +12,25 @@ const DashboardHome = () => {
   
   const [recentOrders, setRecentOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalRevenue: 0,
     activeLocations: 0,
     averageOrderValue: 0
   });
+
+  // Handle responsive design
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Fetch dashboard data on component mount
   useEffect(() => {
@@ -63,11 +76,66 @@ const DashboardHome = () => {
 
   const formatDate = (dateString) => {
     try {
-      return format(new Date(dateString), 'MMM dd, yyyy • HH:mm');
+      return format(new Date(dateString), isMobile ? 'MMM dd' : 'MMM dd, yyyy • HH:mm');
     } catch (e) {
       return dateString;
     }
   };
+
+  const formatCurrency = (amount) => {
+    return isMobile ? `₹${amount.toFixed(0)}` : `Rs ${amount.toFixed(2)}`;
+  };
+
+  // Mobile Card Component for Stats
+  const StatCard = ({ icon, label, value, colorClass }) => (
+    <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+      <div className={`flex items-center ${isMobile ? 'flex-col text-center' : ''}`}>
+        <div className={`p-2 sm:p-3 rounded-full ${colorClass} ${isMobile ? 'mb-3' : ''}`}>
+          {icon}
+        </div>
+        <div className={`${isMobile ? '' : 'ml-4'}`}>
+          <p className={`text-xs sm:text-sm text-gray-500 uppercase ${isMobile ? 'mb-1' : ''}`}>
+            {label}
+          </p>
+          <h3 className={`${isMobile ? 'text-lg' : 'text-xl sm:text-2xl'} font-bold text-gray-800`}>
+            {value}
+          </h3>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Mobile Order Card Component
+  const MobileOrderCard = ({ order }) => (
+    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <p className="font-semibold text-gray-900 text-sm">#{order.order_number}</p>
+          <p className="text-xs text-gray-500">{formatDate(order.order_date)}</p>
+        </div>
+        <p className="font-bold text-green-600">{formatCurrency(order.total_amount)}</p>
+      </div>
+      <p className="text-sm text-gray-600 truncate">{order.location_name}</p>
+    </div>
+  );
+
+  // Mobile Location Card Component
+  const MobileLocationCard = ({ location }) => (
+    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex-1">
+          <p className="font-semibold text-gray-900 text-sm">{location.name}</p>
+          <p className="text-xs text-gray-500 mt-1">{location.city}</p>
+        </div>
+        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+          location.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`}>
+          {location.is_active ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+      <p className="text-sm text-gray-600 truncate">{location.address}</p>
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -78,161 +146,160 @@ const DashboardHome = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0">
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-              <FaShoppingCart size={24} />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-500 uppercase">Total Orders</p>
-              <h3 className="text-2xl font-bold text-gray-800">{stats.totalOrders}</h3>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-green-100 text-green-600">
-              <FaChartLine size={24} />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-500 uppercase">Total Revenue</p>
-              <h3 className="text-2xl font-bold text-gray-800">Rs {stats.totalRevenue.toFixed(2)}</h3>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-orange-100 text-orange-600">
-              <FaStore size={24} />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-500 uppercase">Active Locations</p>
-              <h3 className="text-2xl font-bold text-gray-800">{stats.activeLocations}</h3>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-purple-100 text-purple-600">
-              <FaUtensils size={24} />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm text-gray-500 uppercase">Avg. Order Value</p>
-              <h3 className="text-2xl font-bold text-gray-800">Rs {stats.averageOrderValue.toFixed(2)}</h3>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          icon={<FaShoppingCart size={isMobile ? 20 : 24} />}
+          label="Total Orders"
+          value={stats.totalOrders}
+          colorClass="bg-blue-100 text-blue-600"
+        />
+        <StatCard
+          icon={<FaChartLine size={isMobile ? 20 : 24} />}
+          label="Total Revenue"
+          value={formatCurrency(stats.totalRevenue)}
+          colorClass="bg-green-100 text-green-600"
+        />
+        <StatCard
+          icon={<FaStore size={isMobile ? 20 : 24} />}
+          label="Active Locations"
+          value={stats.activeLocations}
+          colorClass="bg-orange-100 text-orange-600"
+        />
+        <StatCard
+          icon={<FaUtensils size={isMobile ? 20 : 24} />}
+          label="Avg. Order Value"
+          value={formatCurrency(stats.averageOrderValue)}
+          colorClass="bg-purple-100 text-purple-600"
+        />
       </div>
       
       {/* Recent Orders */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-800">Recent Orders</h2>
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-800">Recent Orders</h2>
         </div>
         
-        <div className="overflow-x-auto">
-          {recentOrders.length === 0 ? (
-            <div className="text-center py-6 text-gray-500">No recent orders found</div>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order #
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+        {recentOrders.length === 0 ? (
+          <div className="text-center py-6 text-gray-500">No recent orders found</div>
+        ) : (
+          <>
+            {/* Mobile View */}
+            {isMobile ? (
+              <div className="p-4">
                 {recentOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {order.order_number}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(order.order_date)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {order.location_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      Rs {order.total_amount.toFixed(2)}
-                    </td>
-                  </tr>
+                  <MobileOrderCard key={order.id} order={order} />
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </div>
+            ) : (
+              /* Desktop/Tablet Table View */
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Order #
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Location
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {recentOrders.map((order) => (
+                      <tr key={order.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {order.order_number}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(order.order_date)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {order.location_name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatCurrency(order.total_amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
       </div>
       
       {/* Locations Overview (for Super Admin) */}
       {user && user.is_super_admin && locations.length > 0 && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800">Locations Overview</h2>
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-800">Locations Overview</h2>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Address
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    City
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {locations.map((location) => (
-                  <tr key={location.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {location.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {location.address}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {location.city}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        location.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {location.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+          {/* Mobile View */}
+          {isMobile ? (
+            <div className="p-4">
+              {locations.map((location) => (
+                <MobileLocationCard key={location.id} location={location} />
+              ))}
+            </div>
+          ) : (
+            /* Desktop/Tablet Table View */
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Address
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      City
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {locations.map((location) => (
+                    <tr key={location.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {location.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {location.address}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {location.city}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          location.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {location.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-export default DashboardHome; 
+export default DashboardHome;

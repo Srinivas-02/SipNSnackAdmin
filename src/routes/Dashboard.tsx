@@ -14,6 +14,7 @@ import useAccountStore from '../store/account';
 
 const Dashboard = () => {
     const [isMobile, setIsMobile] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const location = useLocation();
     const { user } = useAccountStore();
     
@@ -39,10 +40,11 @@ const Dashboard = () => {
         return true;
     };
 
-    // Handle responsive layout
+    // Enhanced responsive breakpoints
     useEffect(() => {
         const checkScreenSize = () => {
-            setIsMobile(window.innerWidth < 768);
+            const width = window.innerWidth;
+            setIsMobile(width < 1024); // Mobile/tablet under 1024px
         };
         
         checkScreenSize();
@@ -68,23 +70,95 @@ const Dashboard = () => {
         return pathMap[location.pathname] || 'Dashboard';
     };
 
+    // Get responsive margins based on screen size
+    const getContentMargins = () => {
+        if (isMobile) {
+            return 'ml-0'; // No left margin on mobile/tablet
+        } else {
+            return 'ml-64'; // Full sidebar width on desktop
+        }
+    };
+
+    // Get responsive padding
+    const getContentPadding = () => {
+        if (isMobile) {
+            return 'px-4 py-4'; // Minimal padding on mobile/tablet
+        } else {
+            return 'px-8 py-8'; // Full padding on desktop
+        }
+    };
+
     return (
         <div className="flex w-full h-screen bg-gray-100">
-            <Sidebar isMobile={isMobile} />
+            <Sidebar 
+                isMobile={isMobile} 
+                isMobileMenuOpen={isMobileMenuOpen}
+                setIsMobileMenuOpen={setIsMobileMenuOpen}
+            />
             
-            <div className={`flex-1 transition-all ${isMobile ? 'ml-0' : 'ml-64'} p-6 overflow-auto`}>
-                <header className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-800">
-                        {getTitle()}
-                    </h1>
-                    {user && (
-                        <div className="text-sm text-gray-500 mt-1">
-                            Welcome, {user.first_name} {user.last_name}
+            {/* Main Content Area */}
+            <div className={`
+                flex-1 transition-all duration-300 overflow-auto
+                ${getContentMargins()}
+                ${getContentPadding()}
+            `}>
+                {/* Mobile/Tablet Top Bar with Logo and Title - Only for mobile */}
+                {isMobile && (
+                    <>
+                        <div className="mb-6">
+                            <div className="bg-white rounded-lg shadow-sm p-4">
+                                <div className="flex items-center">
+                                    {/* Logo - Clickable to open menu */}
+                                    <button
+                                        onClick={() => {
+                                            console.log('Logo clicked!'); // Debug log
+                                            setIsMobileMenuOpen(true);
+                                        }}
+                                        className="flex-shrink-0 mr-4 p-2 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                                        aria-label="Open menu"
+                                    >
+                                        <img 
+                                            src="/src/assets/Logo.png" 
+                                            alt="Sip N Snack Logo" 
+                                            className="h-8 w-8 object-contain"
+                                        />
+                                    </button>
+                                    
+                                    {/* Admin Panel Title and Welcome - Left aligned */}
+                                    <div className="flex flex-col items-start">
+                                        <h2 className="text-xl font-semibold text-gray-800">
+                                            Sip N Snack Admin Panel
+                                        </h2>
+                                        {user && (
+                                            <p className="text-sm text-gray-600">
+                                                Welcome, {user.first_name}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    )}
-                </header>
+                        
+                        {/* Page Title */}
+                        <div className="mb-6 text-left">
+                            <h1 className="text-2xl font-bold text-gray-800">
+                                {getTitle()}
+                            </h1>
+                        </div>
+                    </>
+                )}
                 
-                <div className="w-full h-full">
+                {/* Desktop Page Title - Simple title only */}
+                {!isMobile && (
+                    <div className="mb-6">
+                        <h1 className="text-2xl font-bold text-gray-800">
+                            {getTitle()}
+                        </h1>
+                    </div>
+                )}
+                
+                {/* Routes Container */}
+                <div className="w-full flex-1">
                     <Routes>
                         <Route path="/" element={<DashboardHome />} />
                         <Route 
@@ -116,7 +190,6 @@ const Dashboard = () => {
                         />
                         <Route path="/analytics" element={<Analytics />} />
                         <Route path="/settings" element={<Settings />} />
-                        {/* Catch all other routes */}
                         <Route path="*" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </div>
