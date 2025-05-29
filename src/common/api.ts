@@ -57,7 +57,10 @@ api.interceptors.response.use(
                 originalRequest.headers.Authorization = `Bearer ${access}`;
                 
                 // Retry the original request
-                return api(originalRequest);
+                if (originalRequest) {
+                    return api.request(originalRequest);
+                }
+                return Promise.reject(error);
             } catch (refreshError) {
                 // If refresh fails, redirect to login
                 localStorage.removeItem('access_token');

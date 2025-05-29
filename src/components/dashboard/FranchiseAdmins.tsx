@@ -2,12 +2,23 @@ import { FaPlus, FaTrash, FaTimes, FaUserShield, FaEdit, FaMapMarkerAlt, FaLocat
 import { useState, useEffect } from 'react';
 import useFranchiseAdminStore from '../../store/franchiseAdmin';
 import { useLocationStore } from '../../store/location';
+import useAccountStore from '../../store/account';
+import api from '../../common/api';
 
 interface Location {
   id: number;
   name: string;
   city: string;
   state: string;
+}
+
+interface User {
+  id: number;
+  email: string;
+  is_super_admin: boolean;
+  is_franchise_admin: boolean;
+  locations?: Location[];
+  assigned_locations?: Location[];
 }
 
 function isApiError(err: unknown): err is { response: { data: { error?: string; message?: string } } } {
@@ -53,6 +64,14 @@ const FranchiseAdmins = () => {
   } = useFranchiseAdminStore();
 
   const { locations, fetchLocations } = useLocationStore();
+  const { user } = useAccountStore();
+
+  // Filter available locations based on user's access
+  const availableLocations = user?.is_super_admin 
+    ? locations 
+    : locations.filter(location => 
+        user?.assigned_locations?.some(userLoc => userLoc.id === location.id)
+      );
 
   const [formData, setFormData] = useState<{
     id?: number;
@@ -84,14 +103,32 @@ const FranchiseAdmins = () => {
           fetchFranchiseAdmins(),
           fetchLocations()
         ]);
+
+        // If user is a franchise admin, fetch their assigned locations
+        if (user?.is_franchise_admin && (!user.assigned_locations || user.assigned_locations.length === 0)) {
+          try {
+            const response = await api.get(`/accounts/franchise-admin/?id=${user.id}`);
+            if (response.data && response.data.locations) {
+              // Update user's assigned locations
+              user.assigned_locations = response.data.locations;
+            }
+          } catch (err) {
+            console.error('Error fetching franchise admin data:', err);
+            setError('Failed to fetch your assigned locations');
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       }
     };
     initializeData();
-  }, [fetchFranchiseAdmins, fetchLocations]);
+  }, [fetchFranchiseAdmins, fetchLocations, user]);
 
   const handleAddAdmin = () => {
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Not authorized to create franchise admins');
+      return;
+    }
     setSelectedAdmin(null);
     setFormData({
       email: '',
@@ -105,6 +142,10 @@ const FranchiseAdmins = () => {
   };
 
   const handleEditAdmin = (admin: any) => {
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Not authorized to edit franchise admins');
+      return;
+    }
     setSelectedAdmin(admin);
     setFormData({
       id: admin.id,
@@ -119,6 +160,10 @@ const FranchiseAdmins = () => {
   };
 
   const handleAssignLocations = (admin: any) => {
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Not authorized to assign locations');
+      return;
+    }
     setSelectedAdmin(admin);
     setAssignFormData({
       admin_id: admin.id,
@@ -128,11 +173,21 @@ const FranchiseAdmins = () => {
   };
 
   const handleDeleteAdmin = async (id: number) => {
+    if (!user?.is_super_admin && !user?.is_franchise_admin) {
+      setError('Not authorized to delete franchise admins');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this franchise admin?')) {
       try {
         await deleteFranchiseAdmin(id);
+        setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete franchise admin');
+        if (isApiError(err)) {
+          setError(err.response.data.error || err.response.data.message || 'Failed to delete franchise admin');
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to delete franchise admin');
+        }
       }
     }
   };
@@ -147,9 +202,24 @@ const FranchiseAdmins = () => {
 
     try {
       if (selectedAdmin) {
+        if (!user?.is_super_admin && !user?.is_franchise_admin) {
+          setError('Not authorized to edit franchise admins');
+          return;
+        }
         await updateFranchiseAdmin(selectedAdmin.id, formData);
       } else {
-        await addFranchiseAdmin(formData);
+        if (user?.is_franchise_admin || user?.is_super_admin) {
+          // Create franchise admin without any initial location assignment
+          await addFranchiseAdmin({
+            ...formData,
+            location_ids: [] // Start with no locations assigned
+          });
+          // Refresh the franchise admin list after creating a new admin
+          await fetchFranchiseAdmins();
+        } else {
+          setError('Not authorized to create franchise admins');
+          return;
+        }
       }
       setShowModal(false);
     } catch (err) {
@@ -165,8 +235,20 @@ const FranchiseAdmins = () => {
     e.preventDefault();
     setError(null);
 
+    if (!(user?.is_franchise_admin || user?.is_super_admin)) {
+      setError('Not authorized to assign locations');
+      return;
+    }
+
     try {
-      await assignLocations(selectedAdmin.id, assignFormData.location_ids);
+      // For franchise admins, only allow assigning their own locations
+      const locationIds = user?.is_super_admin 
+        ? assignFormData.location_ids 
+        : assignFormData.location_ids.filter(id => 
+            availableLocations.some(loc => loc.id === id)
+          );
+
+      await assignLocations(selectedAdmin.id, locationIds);
       setShowAssignModal(false);
     } catch (err) {
       if (isApiError(err)) {
@@ -303,108 +385,90 @@ const FranchiseAdmins = () => {
       {/* Add/Edit Franchise Admin Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-90vh overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold text-gray-900">
-                {selectedAdmin ? 'Edit Franchise Admin' : 'Add New Franchise Admin'}
+                {selectedAdmin ? 'Edit Franchise Admin' : 'Add Franchise Admin'}
               </h3>
               <button
                 onClick={() => setShowModal(false)}
                 className="text-gray-400 hover:text-gray-600"
-                aria-label="Close modal"
               >
                 <FaTimes size={20} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-                  <input
-                    type="text"
-                    name="first_name"
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    name="last_name"
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <input
+                  type="text"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                <input
+                  type="text"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                 <input
                   type="email"
-                  name="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    required={!selectedAdmin}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                  <input
-                    type="password"
-                    name="confirm_password"
-                    value={cpassword}
-                    onChange={(e) => {
-                      setcpassword(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    onBlur={() => {
-                      if (formData.password && formData.password !== cpassword) {
-                        setError('Passwords do not match');
-                      } else {
-                        setError(null);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                    required={!selectedAdmin}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={cpassword}
+                  onChange={(e) => setcpassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
               {error && (
                 <div className="text-red-600 text-sm mb-2">{error}</div>
               )}
-              <div className="pt-4 flex justify-end space-x-3">
+
+              <div className="flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className={`px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500${
-                    Boolean(formData.password && formData.password !== cpassword) || loading ? ' opacity-50 cursor-not-allowed' : ''
+                  className={`px-4 py-2 bg-blue-600 text-white rounded-md ${
+                    loading ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
-                  disabled={Boolean(formData.password && formData.password !== cpassword) || loading}
+                  disabled={loading}
                 >
-                  {loading ? 'Saving...' : selectedAdmin ? 'Update' : 'Add'} Franchise Admin
+                  {loading ? 'Saving...' : 'Save'}
                 </button>
               </div>
             </form>
@@ -443,9 +507,9 @@ const FranchiseAdmins = () => {
                     setAssignFormData({ ...assignFormData, location_ids: selectedValues });
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                  size={Math.min(5, locations.length)}
+                  size={Math.min(5, availableLocations.length)}
                 >
-                  {locations.map(location => (
+                  {availableLocations.map(location => (
                     <option key={location.id} value={location.id}>
                       {location.name} ({location.city}, {location.state})
                     </option>

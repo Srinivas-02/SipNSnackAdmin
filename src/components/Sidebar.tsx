@@ -47,13 +47,13 @@ const Sidebar = ({ isMobile = false }: SidebarProps) => {
       name: 'Franchise Locations', 
       path: '/dashboard/locations', 
       icon: <FaStore size={20} />,
-      roles: ['super'] // Only super admin can manage all franchise locations
+      roles: ['super', 'franchise'] // Only super admin and franchise admin can manage all franchise locations
     },
     { 
       name: 'Franchise Admins', 
       path: '/dashboard/franchise-admins', 
       icon: <FaUserShield size={20} />,
-      roles: ['super'] // Only super admin can manage franchise admins
+      roles: ['super', 'franchise'] // Only super admin can manage franchise admins
     },
     { 
       name: 'My Location', 

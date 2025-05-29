@@ -35,7 +35,7 @@ interface FranchiseAdminStore {
   assignLocations: (adminId: number, locationIds: number[]) => Promise<void>;
 }
 
-const useFranchiseAdminStore = create<FranchiseAdminStore>((set, get) => ({
+const useFranchiseAdminStore = create<FranchiseAdminStore>((set) => ({
   franchiseAdmins: [],
   loading: false,
   error: null,
@@ -101,7 +101,10 @@ const useFranchiseAdminStore = create<FranchiseAdminStore>((set, get) => ({
     }
     try {
       set({ loading: true, error: null });
-      const response = await api.patch(`/accounts/franchise-admin/?id=${id}`, data);
+      const response = await api.patch('/accounts/franchise-admin/', {
+        id: id,
+        ...data
+      });
       const updatedAdmin = response.data;
       set(state => ({
         franchiseAdmins: state.franchiseAdmins.map(admin => 
@@ -142,7 +145,7 @@ const useFranchiseAdminStore = create<FranchiseAdminStore>((set, get) => ({
   assignLocations: async (adminId, locationIds) => {
     try {
       set({ loading: true, error: null });
-      const response = await api.patch(`/accounts/franchise-admin/?id=${adminId}`, {
+      const response = await api.patch('/accounts/franchise-admin/', {
         id: adminId,
         location_ids: locationIds
       });

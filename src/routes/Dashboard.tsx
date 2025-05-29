@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import DashboardHome from '../components/dashboard/DashboardHome';
 import Locations from '../components/dashboard/Locations';
-import MyLocation from '../components/dashboard/MyLocation';
 import MenuItems from '../components/dashboard/MenuItems';
 import Orders from '../components/dashboard/Orders';
 import Feedback from '../components/dashboard/Feedback';
@@ -11,6 +10,7 @@ import Staff from '../components/dashboard/Staff';
 import Analytics from '../components/dashboard/Analytics';
 import Settings from '../components/dashboard/Settings';
 import FranchiseAdmins from '../components/dashboard/FranchiseAdmins';
+import MyLocation from '../components/dashboard/MyLocation';
 import useAccountStore from '../store/account';
 
 const Dashboard = () => {
@@ -23,20 +23,13 @@ const Dashboard = () => {
         if (!user) return false;
         
         // Routes only super admin can access
-        const superAdminRoutes = ['/dashboard/locations'];
-        
-        // Routes only franchise admin can access
-        const franchiseAdminRoutes = ['/dashboard/my-location'];
+        const superAdminRoutes = ['/dashboard/franchise-admins'];
         
         // Routes accessible by both super admin and franchise admin
-        const adminRoutes = ['/dashboard/users'];
+        const adminRoutes = ['/dashboard/users', '/dashboard/locations'];
         
         // Check permissions based on path and role
         if (superAdminRoutes.includes(path) && !user.is_super_admin) {
-            return false;
-        }
-        
-        if (franchiseAdminRoutes.includes(path) && !user.is_franchise_admin) {
             return false;
         }
         
@@ -64,8 +57,8 @@ const Dashboard = () => {
         const pathMap: Record<string, string> = {
             '/dashboard': 'Dashboard Overview',
             '/dashboard/locations': 'Manage Franchise Locations',
-            '/dashboard/franchise-admins': 'Manage Franchise Admins',
             '/dashboard/my-location': 'My Location',
+            '/dashboard/franchise-admins': 'Manage Franchise Admins',
             '/dashboard/menu-items': 'Menu Items',
             '/dashboard/orders': 'Order History',
             '/dashboard/feedback': 'Customer Feedback',
@@ -105,18 +98,18 @@ const Dashboard = () => {
                             } 
                         />
                         <Route 
-                            path="/franchise-admins" 
+                            path="/my-location" 
                             element={
-                                checkPermission('/dashboard/franchise-admins') 
-                                    ? <FranchiseAdmins /> 
+                                user?.is_franchise_admin
+                                    ? <MyLocation /> 
                                     : <Navigate to="/dashboard" replace />
                             } 
                         />
                         <Route 
-                            path="/my-location" 
+                            path="/franchise-admins" 
                             element={
-                                checkPermission('/dashboard/my-location') 
-                                    ? <MyLocation /> 
+                                user?.is_franchise_admin || user?.is_super_admin
+                                    ? <FranchiseAdmins /> 
                                     : <Navigate to="/dashboard" replace />
                             } 
                         />

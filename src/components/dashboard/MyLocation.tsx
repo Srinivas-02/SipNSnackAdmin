@@ -10,17 +10,9 @@ interface LocationData {
   address: string;
   city: string;
   state: string;
-  postal_code: string;
-  country: string;
-  phone: string;
-  email: string;
+  phone: string | number;
+  password?: string;
   status: 'active' | 'inactive' | 'pending';
-  operating_hours: {
-    day: string;
-    open_time: string;
-    close_time: string;
-    is_closed: boolean;
-  }[];
 }
 
 function isApiError(err: unknown): err is { 
@@ -71,7 +63,7 @@ const MyLocation = () => {
   const [locationData, setLocationData] = useState<LocationData[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<LocationData | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<Partial<LocationData & { password: string; confirm_password: string }>>({});
+  const [formData, setFormData] = useState<Partial<LocationData & { confirm_password: string }>>({});
   const [cpassword, setCpassword] = useState('');
 
   // Get user information and store functions
@@ -174,9 +166,6 @@ const MyLocation = () => {
   // Add a debug effect to log selected location changes
   useEffect(() => {
     console.log('Selected location changed:', selectedLocation);
-    if (selectedLocation) {
-      console.log('Selected location email:', selectedLocation.email);
-    }
   }, [selectedLocation]);
 
   const formatTime = (date: Date) => {
@@ -328,7 +317,7 @@ const MyLocation = () => {
               onSubmit={handleSubmit}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+              className="space-y-6"
             >
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -339,25 +328,54 @@ const MyLocation = () => {
                   name="name"
                   value={formData.name || ''}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Street Address
                 </label>
                 <input
-                  type="email"
-                  name="email"
-                  value={formData.email || ''}
+                  type="text"
+                  name="address"
+                  value={formData.address || ''}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
-              
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    name="city"
+                    value={formData.city || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    name="state"
+                    value={formData.state || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Phone
@@ -367,81 +385,11 @@ const MyLocation = () => {
                   name="phone"
                   value={formData.phone || ''}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   required
                 />
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Address
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  City
-                </label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.city || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State/Province
-                </label>
-                <input
-                  type="text"
-                  name="state"
-                  value={formData.state || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Postal Code
-                </label>
-                <input
-                  type="text"
-                  name="postal_code"
-                  value={formData.postal_code || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country
-                </label>
-                <input
-                  type="text"
-                  name="country"
-                  value={formData.country || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Password
@@ -451,10 +399,10 @@ const MyLocation = () => {
                   name="password"
                   value={formData.password || ''}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Confirm Password
@@ -474,15 +422,15 @@ const MyLocation = () => {
                       setError(null);
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-              
+
               {error && (
-                <div className="col-span-1 md:col-span-2 text-red-600 text-sm mb-2">{error}</div>
+                <div className="text-red-600 text-sm mb-2">{error}</div>
               )}
-              
-              <div className="col-span-1 md:col-span-2 flex justify-end mt-4 space-x-3">
+
+              <div className="flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -491,13 +439,17 @@ const MyLocation = () => {
                     setError(null);
                     setFormData(selectedLocation);
                   }}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md"
-                >Cancel</button>
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  className={`px-4 py-2 bg-blue-600 text-white rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   disabled={isLoading}
-                >{isLoading ? 'Saving...' : 'Save Changes'}</button>
+                >
+                  {isLoading ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </motion.form>
           ) : (
@@ -506,9 +458,6 @@ const MyLocation = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Contact Information</h3>
                   <p className="text-gray-700 mb-2">
-                    <span className="font-medium">Email:</span> {user?.email || 'Not provided'}
-                  </p>
-                  <p className="text-gray-700">
                     <span className="font-medium">Phone:</span> {selectedLocation.phone || 'Not provided'}
                   </p>
                 </div>
@@ -517,8 +466,7 @@ const MyLocation = () => {
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Address</h3>
                   <p className="text-gray-700">
                     {selectedLocation.address || 'Not provided'}<br />
-                    {selectedLocation.city || 'Not provided'}, {selectedLocation.state || 'Not provided'} {selectedLocation.postal_code || 'Not provided'}<br />
-                    {selectedLocation.country || 'Not provided'}
+                    {selectedLocation.city || 'Not provided'}, {selectedLocation.state || 'Not provided'}
                   </p>
                 </div>
               </div>
@@ -547,26 +495,6 @@ const MyLocation = () => {
                       })()}
                     </p>
                   </div>
-                </div>
-              </div>
-
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Operating Hours</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {selectedLocation.operating_hours?.map((hours, index) => (
-                    <div key={index} className="bg-gray-50 rounded p-3">
-                      <p className="font-medium text-gray-700">{hours.day || 'Unknown'}</p>
-                      {hours.is_closed ? (
-                        <p className="text-gray-500">Closed</p>
-                      ) : (
-                        <p className="text-gray-700">{hours.open_time || 'Not set'} - {hours.close_time || 'Not set'}</p>
-                      )}
-                    </div>
-                  )) || (
-                    <div className="col-span-full text-center text-gray-500">
-                      No operating hours set
-                    </div>
-                  )}
                 </div>
               </div>
               
