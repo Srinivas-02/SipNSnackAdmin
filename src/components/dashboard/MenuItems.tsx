@@ -10,22 +10,10 @@ const MenuItems = () => {
   const locations = useLocationStore((state) => state.locations);
   // Get categoriesByLocation from store
   const categoriesByLocation = useMenuStore((state) => state.categoriesByLocation);
+  const { fetchCategories, fetchMenuItems } = useMenuStore();
 
-  // Flatten all menu items from all categories in all locations
-  const menuItems = Object.values(categoriesByLocation)
-    .flat()
-    .flatMap((cat) => cat.menu_items.map((item) => ({
-      ...item,
-      category: cat.name,
-      location_id: cat.location_id,
-    })));
-
-  // Gather all categories for the selected location
-  const getCategoriesForLocation = (locationId: string | number | undefined) => {
-    if (!locationId || locationId === 'all') return [];
-    return categoriesByLocation[Number(locationId)] || [];
-  };
-
+  // State declarations
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [selectedLocation, setSelectedLocation] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -65,16 +53,57 @@ const MenuItems = () => {
     location_id: undefined,
     display_order: 0,
   });
-  const { fetchCategories, fetchMenuItems } = useMenuStore();
 
-  // Add useEffect to fetch categories and menu items when component mounts
+  // Update the useEffect for data fetching
   useEffect(() => {
     const fetchData = async () => {
-      await fetchCategories();
-      await fetchMenuItems();
+      try {
+        // Fetch both data in parallel
+        await Promise.all([
+          fetchCategories(),
+          fetchMenuItems()
+        ]);
+      } catch (error) {
+        console.error('Error fetching menu data:', error);
+      } finally {
+        setIsInitialLoad(false);
+      }
     };
-    fetchData();
-  }, [fetchCategories, fetchMenuItems]);
+
+    // Only fetch if we don't have any categories loaded
+    if (Object.keys(categoriesByLocation).length === 0) {
+      fetchData();
+    } else {
+      setIsInitialLoad(false);
+    }
+  }, []); // Empty dependency array since we check data existence inside
+
+  // Show loading state during initial load
+  if (isInitialLoad) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading menu items...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Flatten all menu items from all categories in all locations
+  const menuItems = Object.values(categoriesByLocation)
+    .flat()
+    .flatMap((cat) => cat.menu_items.map((item) => ({
+      ...item,
+      category: cat.name,
+      location_id: cat.location_id,
+    })));
+
+  // Gather all categories for the selected location
+  const getCategoriesForLocation = (locationId: string | number | undefined) => {
+    if (!locationId || locationId === 'all') return [];
+    return categoriesByLocation[Number(locationId)] || [];
+  };
 
   // Handle location change: reset category if location changes
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
