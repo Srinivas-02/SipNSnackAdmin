@@ -156,7 +156,11 @@ const Login = () => {
                 // Server responded with an error
                 if (error.response.status === 401) {
                     setError('Invalid email or password');
-                } else if (error.response.data?.message) {
+                } 
+                else if(error.response.status === 403){
+                    setError('Normal login is disabled - use Google login');
+                }
+                else if (error.response.data?.message) {
                     setError(error.response.data.message);
                 } else {
                     setError(`Login failed: ${error.response.status}`);
