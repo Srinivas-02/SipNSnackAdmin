@@ -622,18 +622,41 @@ const MenuItems = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Image URL
-                  </label>
-                  <input
-                    type="text"
-                    name="image"
-                    value={formData.image ?? ''}
-                    onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="https://example.com/image.jpg"
-                  />
-                </div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Upload Image
+  </label>
+  <div className="w-full">
+    <input
+      type="file"
+      name="image"
+      accept="image/*"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          // Create a URL for the file to store as string
+          const fileUrl = URL.createObjectURL(file);
+          
+          // Create a synthetic event that matches the expected type
+          const syntheticEvent = {
+            target: {
+              ...e.target,
+              name: 'image',
+              value: fileUrl
+            }
+          } as React.ChangeEvent<HTMLInputElement>;
+          
+          handleFormChange(syntheticEvent);
+        }
+      }}
+      className="w-full px-3 py-2 border border-gray-300 rounded-md file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+    />
+    {formData.image && (
+      <div className="mt-2 text-sm text-gray-600">
+        Selected file uploaded
+      </div>
+    )}
+  </div>
+</div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category
