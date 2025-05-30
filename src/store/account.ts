@@ -9,7 +9,11 @@ export interface User {
     last_name: string,
     is_super_admin: boolean,
     is_franchise_admin: boolean,
-    is_staff_member: boolean
+    is_staff_member: boolean,
+    assigned_locations?: {
+        id: number;
+        name: string;
+    }[];
 }
 
 interface AuthResponse {
@@ -24,6 +28,7 @@ interface AccountState {
     access_token: string | null,
     user: User | null,
     setDetails: (response: AuthResponse) => void,
+    updateUserLocations: (locations: { id: number; name: string; }[]) => void,
     logout: () => void,
     initializeFromStorage: () => void,
 }
@@ -47,6 +52,15 @@ const useAccountStore = create<AccountState>()(
                     access_token: response.access,
                     user: response.user
                 });
+            },
+
+            updateUserLocations: (locations) => {
+                set((state) => ({
+                    user: state.user ? {
+                        ...state.user,
+                        assigned_locations: locations
+                    } : null
+                }));
             },
             
             logout: () => {

@@ -10,13 +10,48 @@ import Feedback from '../components/dashboard/Feedback';
 import Staff from '../components/dashboard/Staff';
 import Analytics from '../components/dashboard/Analytics';
 import Settings from '../components/dashboard/Settings';
+import NoLocationAssigned from '../components/NoLocationAssigned';
 import useAccountStore from '../store/account';
+import useLocationStore from '../store/location';
+import api from '../common/api';
 
 const Dashboard = () => {
     const [isMobile, setIsMobile] = useState(false);
     const location = useLocation();
-    const { user } = useAccountStore();
+    const { user, updateUserLocations } = useAccountStore();
+    const { locations } = useLocationStore();
+    const [isCheckingLocations, setIsCheckingLocations] = useState(true);
     
+    // Check if user has any assigned locations
+    const hasAssignedLocations = () => {
+        if (!user) return false;
+        if (user.is_super_admin) return true;
+        return user.assigned_locations && user.assigned_locations.length > 0;
+    };
+
+    // Check for location assignments in real-time
+    useEffect(() => {
+        const checkLocationAssignments = async () => {
+            if (!user?.id || user.is_super_admin) {
+                setIsCheckingLocations(false);
+                return;
+            }
+
+            try {
+                const response = await api.get(`/accounts/franchise-admin/?id=${user.id}`);
+                if (response.data && response.data.locations) {
+                    updateUserLocations(response.data.locations);
+                }
+            } catch (error) {
+                console.error('Error checking location assignments:', error);
+            } finally {
+                setIsCheckingLocations(false);
+            }
+        };
+
+        checkLocationAssignments();
+    }, [user?.id, user?.is_super_admin, updateUserLocations]);
+
     // Check if user has permission for current route
     const checkPermission = (path: string): boolean => {
         if (!user) return false;
@@ -50,6 +85,20 @@ const Dashboard = () => {
         
         return () => window.removeEventListener('resize', checkScreenSize);
     }, []);
+
+    // Show loading state while checking locations
+    if (isCheckingLocations) {
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+        );
+    }
+
+    // If user has no assigned locations, show the NoLocationAssigned component
+    if (!hasAssignedLocations()) {
+        return <NoLocationAssigned />;
+    }
 
     // Get the title based on current path
     const getTitle = (): string => {
